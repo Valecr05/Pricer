@@ -177,8 +177,9 @@ python -m sx_pricer --solo-cache --params params.json --t 2026-07-28 --t1 2026-0
 
 El caché se invalida por sí solo. Cada resumen recuerda el nombre, el tamaño y la fecha
 de modificación del archivo que lo produjo, **y también la huella de los insumos de IBR
-de esa fecha**: si mañana agregas la curva de un día ya procesado, se vuelve a procesar
-ese día y ninguno más.
+de esa fecha** —el archivo de curva que se usó y los dos meses de senda histórica que el
+margen llega a consultar—: si mañana agregas la curva de un día ya procesado, o corriges
+un valor de la senda, se vuelve a procesar ese día y ninguno más.
 
 | Opción | Qué hace |
 |---|---|
@@ -427,12 +428,48 @@ Insumos, los dos por fecha:
 | Archivo | Qué aporta | Dónde |
 |---|---|---|
 | `IND_IBR_AAAAMMDD.txt` | curva forward, tenor IB1; se usa la del **día hábil anterior** | carpeta de `--curvas` |
-| `IB1.xlsx` | senda histórica diaria, de donde sale el IBR previo | la misma carpeta |
+| `IB1.xlsx` | senda histórica diaria, de donde salen las lecturas anteriores a la valoración | la misma carpeta |
 
 **Cada fecha usa la curva del día hábil anterior**, que es la que estaba publicada al
 valorar. Se toma el archivo más reciente fechado antes de D, así que los lunes y los días
-después de festivo toman el último día hábil con archivo. El **IBR previo no se desplaza**:
-sigue siendo el del propio día de valoración, de la senda histórica `IB1.xlsx`.
+después de festivo toman el último día hábil con archivo. La **senda histórica no se
+desplaza**: va entera, y de ella sale el índice de los períodos que ya habían empezado
+al valorar.
+
+### Dónde se lee el índice de cada cupón
+
+La modalidad es **«Previa»**: la tasa de un período quedó fijada **al empezarlo**, no el
+día en que se paga. Así que el índice de un cupón se lee **un período antes de su pago,
+conservando el número del día**; si ese día no existe en el mes destino, se recorta al
+último:
+
+| Cupón paga | Índice que toma |
+|---|---|
+| 15 de julio | 15 de junio |
+| 31 de diciembre | 30 de noviembre, porque noviembre no tiene 31 |
+| 29 de marzo de 2027 | 28 de febrero de 2027 |
+
+De dónde sale esa lectura depende de dónde caiga, y la regla es una sola: **en o antes de
+la fecha de valoración es un dato publicado y se toma de la senda histórica; después es
+una proyección y se toma de la curva forward**. El primer cupón siempre cae del lado de
+la senda, porque su período empezó antes de valorar.
+
+Con valoración del 28 de septiembre de 2026 y un nodo que vence el 30 de octubre, los
+cupones caen los días 30:
+
+| Cupón | Índice | De dónde |
+|---|---|---|
+| 30 de septiembre (paga en dos días) | 30 de agosto | senda histórica |
+| 30 de octubre (vencimiento) | 30 de septiembre | curva forward |
+
+**La fecha se busca exacta.** Si la senda no trae el día en que se fijó la tasa de algún
+período —un festivo, un fin de semana— ese rango no se calcula y su celda dice «sin
+dato», en vez de sustituirlo por el valor de otro día.
+
+Cuando la fecha de valoración cae en un día que la rejilla mensual reproduce mes a mes
+—lo habitual— el primer cupón lee exactamente la fecha de valoración. Solo cuando la
+rejilla se desplaza, con valoraciones cerca de fin de mes, la lectura se va a un día
+distinto.
 
 Eso funciona sin puntos faltantes porque el archivo empieza en su propia fecha más un día:
 la curva de D−1 arranca en D y cubre todos los flujos que el atajo consulta, que son
@@ -448,9 +485,9 @@ llegue el archivo del día siguiente**, porque necesita una curva anterior a ell
 Convenciones: `J` son días calendario descontando los 29 de febrero del tramo; `L` es
 base 30/360 US/NASD, la de `DAYS360` de Excel; el cronograma se ancla en el vencimiento
 y retrocede en múltiplos exactos de mes, de modo que el día del mes no se arrastra al
-pasar por un mes corto; la tasa de cada período se lee al inicio, contra el IBR previo
-en el primer flujo y contra la curva en el flujo anterior después; el margen es el
-promedio simple de los márgenes por período, redondeado a dos decimales de porcentaje.
+pasar por un mes corto; la tasa de cada período se lee al inicio, un mes antes del pago,
+según la regla de arriba; el margen es el promedio simple de los márgenes por período,
+redondeado a dos decimales de porcentaje.
 
 Comprobación del método, verificada contigo contra la Calculadora IBR: valoración
 28-jul-2026, vencimiento supuesto 2028-01-28 (549 días), TIR 13,521 %, 18 flujos

@@ -356,20 +356,32 @@ def test_lectura_de_la_curva_y_de_la_senda():
 @hay_curva
 def test_margen_atajo_reproduce_el_ejemplo_validado():
     """Nodo «1 a 1.5 Años» del bloque IBR·CDT del 28-jul-2026: plazo 549 días,
-    TIR 13,521 %, 18 flujos mensuales. Verificado contra la Calculadora IBR."""
+    TIR 13,521 %, 18 flujos mensuales. Verificado contra la Calculadora IBR.
+
+    Los 18 cupones del caso principal caen el día 28, así que sus lecturas de índice
+    coinciden con las de la convención anterior y el 1,15 % no se mueve.
+
+    Los otros ocho plazos, en cambio, vencen a D + N días y sus cupones caen en días
+    del mes distintos del 28: el índice del primer período se lee ahora en la senda,
+    el día en que ese período empezó, y no en la fecha de valoración. Si alguno de
+    esos valores se mueve al correr esta prueba, hay que re-validarlo contra la
+    Calculadora IBR antes de fijar el nuevo número — no darlo por bueno.
+    """
     from sx_pricer.ibr import FuenteIBR, cronograma, leer_curva, margen_atajo
     # se lee el archivo directo: lo que se valida aquí es el método, no de qué día
     # se toma la curva
     curva = leer_curva(CURVAS / "IND_IBR_20260728.txt")
-    previo = FuenteIBR.cargar(CURVAS).historico[dt.date(2026, 7, 28)]
+    historico = FuenteIBR.cargar(CURVAS).historico
     D = dt.date(2026, 7, 28)
-    assert previo == pytest.approx(0.11526)
+    # los 18 cupones caen el día 28, así que el índice del primero se lee el 28 del
+    # mes anterior a su pago, que es la propia fecha de valoración
+    assert historico[D] == pytest.approx(0.11526)
 
     venc = D + dt.timedelta(days=549)
     assert venc == dt.date(2028, 1, 28)
     assert len(cronograma(venc, D)) == 18
     m = margen_atajo(fecha_val=D, vencimiento=venc, tir=0.13521,
-                     ibr_previo=previo, curva=curva)
+                     historico=historico, curva=curva)
     assert m == 0.0115                              # 1,15 %
 
     # el resto de los nodos del mismo bloque, para fijar la curva completa
@@ -379,8 +391,65 @@ def test_margen_atajo_reproduce_el_ejemplo_validado():
              364: 0.13237, 726: 0.13393, 1091: 0.13341}
     for dias, esperado in esperados.items():
         assert margen_atajo(fecha_val=D, vencimiento=D + dt.timedelta(days=dias),
-                            tir=tires[dias], ibr_previo=previo,
+                            tir=tires[dias], historico=historico,
                             curva=curva) == esperado, dias
+
+
+def test_el_indice_se_lee_un_mes_antes_del_pago():
+    """«Previa»: la tasa del período se fijó al empezarlo, un mes antes del cupón.
+
+    Se conserva el número del día, y si ese día no existe en el mes destino se
+    recorta al último.
+    """
+    from sx_pricer.ibr import fecha_del_indice
+
+    assert fecha_del_indice(dt.date(2026, 7, 15)) == dt.date(2026, 6, 15)
+    assert fecha_del_indice(dt.date(2026, 12, 31)) == dt.date(2026, 11, 30)
+    assert fecha_del_indice(dt.date(2027, 3, 29)) == dt.date(2027, 2, 28)
+    assert fecha_del_indice(dt.date(2028, 3, 29)) == dt.date(2028, 2, 29)
+    assert fecha_del_indice(dt.date(2026, 5, 31)) == dt.date(2026, 4, 30)
+
+
+def test_el_primer_cupon_lee_la_senda_y_los_demas_la_curva():
+    """Hoy 28-sep-2026, vencimiento 30-oct-2026, cupón mensual.
+
+    Los cupones caen los días 30. El del 30-sep —que paga en dos días— tomó su tasa
+    el 30-ago, antes de valorar, así que sale de la senda histórica. El del 30-oct la
+    toma el 30-sep, después de valorar, así que sale de la curva.
+    """
+    from sx_pricer.ibr import cronograma, margen_atajo
+
+    D, venc = dt.date(2026, 9, 28), dt.date(2026, 10, 30)
+    assert cronograma(venc, D) == [dt.date(2026, 9, 30), dt.date(2026, 10, 30)]
+
+    senda = {dt.date(2026, 8, 30): 0.11}
+    curva = {dt.date(2026, 9, 30): 0.12}
+    assert margen_atajo(fecha_val=D, vencimiento=venc, tir=0.13,
+                        historico=senda, curva=curva) is not None
+
+    # sin el 30-ago no hay margen: la fecha se busca exacta y no se sustituye
+    assert margen_atajo(fecha_val=D, vencimiento=venc, tir=0.13,
+                        historico={dt.date(2026, 9, 28): 0.11}, curva=curva) is None
+    # ni sin el 30-sep en la curva
+    assert margen_atajo(fecha_val=D, vencimiento=venc, tir=0.13,
+                        historico=senda, curva={dt.date(2026, 9, 28): 0.12}) is None
+
+
+def test_el_margen_no_toma_el_ibr_del_dia_de_valoracion():
+    """El primer cupón usa el IBR del inicio de su período, no el de hoy.
+
+    Con la senda plana salvo en la fecha de valoración, mover ese día no cambia nada:
+    lo que manda es el 30 del mes anterior al pago.
+    """
+    from sx_pricer.ibr import margen_atajo
+
+    D, venc = dt.date(2026, 9, 28), dt.date(2026, 10, 30)
+    curva = {dt.date(2026, 9, 30): 0.12}
+    base = margen_atajo(fecha_val=D, vencimiento=venc, tir=0.13,
+                        historico={dt.date(2026, 8, 30): 0.11}, curva=curva)
+    movido = margen_atajo(fecha_val=D, vencimiento=venc, tir=0.13,
+                          historico={dt.date(2026, 8, 30): 0.11, D: 0.30}, curva=curva)
+    assert base is not None and base == movido
 
 
 @hay_curva
@@ -410,8 +479,10 @@ def test_margen_usa_la_curva_del_dia_habil_anterior(tmp_path):
     assert f.para_fecha(dt.date(2026, 7, 24)) is None
     assert "no hay ninguna curva anterior" in f.motivo_faltante(dt.date(2026, 7, 24))
 
-    # el IBR previo no se desplaza: sigue siendo el del propio día de valoración
-    curva, previo = f.para_fecha(dt.date(2026, 7, 28))
+    # la senda histórica no se desplaza con la curva: va entera, y de ella sale el
+    # índice de los períodos que ya habían empezado al valorar
+    curva, historico = f.para_fecha(dt.date(2026, 7, 28))
+    assert historico is f.historico
     assert previo == pytest.approx(f.historico[dt.date(2026, 7, 28)])
     assert previo == pytest.approx(0.11526)
     # y la huella del caché apunta al archivo que de verdad se usa

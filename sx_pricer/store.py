@@ -38,7 +38,7 @@ from .loader import SXFormatError, read_sx
 from .transform import build_valuation
 
 # Subir esta versión invalida todos los resúmenes en caché.
-SUMMARY_VERSION = 7
+SUMMARY_VERSION = 8
 
 # Campos del catálogo de instrumentos: no cambian entre fechas, así que se guardan
 # una sola vez por ISIN en lugar de repetirse en cada resumen.
@@ -87,7 +87,8 @@ def resumir(path: str | Path, *, params: MarketParams,
     ipc = params.ipc_referencia
     val = build_valuation(archivo.data, fecha=fecha, ipc=ipc)
 
-    # Curva del día hábil anterior; el IBR previo sí es del propio día.
+    # Curva del día hábil anterior, y la senda histórica para los períodos que ya
+    # habían empezado al valorar.
     insumos_ibr = fuente_ibr.para_fecha(fecha) if fuente_ibr is not None else None
     motivo_ibr = (fuente_ibr.motivo_faltante(fecha) if fuente_ibr is not None
                   else "no se indicó carpeta de curvas")
@@ -95,9 +96,9 @@ def resumir(path: str | Path, *, params: MarketParams,
     def margen_del_nodo(dias, tir):
         if insumos_ibr is None or dias is None or tir is None:
             return None
-        curva, previo = insumos_ibr
+        curva, historico = insumos_ibr
         return margen_atajo(fecha_val=fecha, vencimiento=fecha + dt.timedelta(days=dias),
-                            tir=tir, ibr_previo=previo, curva=curva)
+                            tir=tir, historico=historico, curva=curva)
 
     # Rejilla mensual anclada en la propia fecha de valoración. Se guarda la del
     # bloque más largo; los demás usan sus primeros anclajes.
@@ -159,7 +160,7 @@ def resumir(path: str | Path, *, params: MarketParams,
         "ipc_duracion": ipc,
         "ibr": {
             "huella": fuente_ibr.huella(fecha) if fuente_ibr is not None else "sin-curvas",
-            "previo": _n(insumos_ibr[1]) if insumos_ibr else None,
+            "previo": _n(fuente_ibr.previo(fecha)) if fuente_ibr is not None else None,
             # el margen se calcula con la curva del día hábil anterior
             "curva_usada": (_fecha(fuente_ibr.fecha_curva_usada(fecha))
                             if fuente_ibr is not None else None),

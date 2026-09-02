@@ -206,7 +206,10 @@ BLOCKS: tuple[BlockSpec, ...] = (
         nota="La columna de tasa es la valoración efectiva anual tal como la envía el "
              "proveedor, sin convertir. El margen se calcula aparte, por el atajo de la "
              "Calculadora IBR de la bvc: se supone que el nodo vence al final de su ventana, que paga cupón mensual hasta esa fecha y que la tasa está "
-             "«Previa». Cada fecha usa la curva IND_IBR de su propio día."),
+             "«Previa», así que el índice de cada cupón se lee un mes antes de su pago, "
+             "conservando el número del día. Lo que cae en o antes de la valoración sale "
+             "de la senda histórica; lo posterior, de la curva IND_IBR del día hábil "
+             "anterior."),
 )
 
 # Índices que entran a la base sin transformar la tasa: su columna de tasa es la

@@ -11,8 +11,8 @@ Necesita dos insumos por fecha de valoración:
     más reciente disponible, que salta fines de semana y festivos— porque es la curva
     con la que se contaba al valorar. Como esa curva arranca en D, cubre todos los
     puntos que el atajo consulta, que son posteriores a D.
-  - **El IBR previo**, de la senda histórica diaria (`IB1.xlsx`), tomando el valor
-    del **propio día de valoración**: este no se desplaza a la fecha anterior.
+  - **La senda histórica diaria** de IBR (`IB1.xlsx`), de donde salen las lecturas
+    que caen en o antes de la fecha de valoración: son datos ya publicados.
 
 Cada fecha usa la curva de su propio día hábil anterior y de ninguna otra. Si no hay
 ningún archivo anterior a D, el margen de D no se calcula.
@@ -23,15 +23,23 @@ Convenciones aplicadas:
   - `L`: días en base 30/360 US/NASD, la de `DAYS360` de Excel.
   - El cronograma se ancla en el vencimiento y retrocede en múltiplos exactos de
     mes, de modo que el día del mes no se arrastra al pasar por un mes corto.
-  - Todos los títulos IB1 se tratan como «Previa»: el primer flujo se descuenta
-    contra el IBR previo y los demás contra la curva leída en el flujo anterior,
-    es decir al inicio del período y no en su pago.
+  - Todos los títulos IB1 se tratan como «Previa»: la tasa de cada período se fija
+    al **inicio** del período y no en su pago, así que el índice de un cupón se lee
+    **un mes antes de la fecha en que ese cupón se paga**, conservando el número del
+    día. Un cupón del 15 de julio lee el IBR del 15 de junio; uno del 31 de diciembre
+    lee el del 30 de noviembre, porque noviembre no tiene 31.
+
+    De dónde sale esa lectura depende de dónde caiga: en o antes de la fecha de
+    valoración es un dato publicado y se toma de la senda histórica; después, es una
+    proyección y se toma de la curva forward. El primer cupón siempre cae del lado
+    de la senda, porque su período empezó antes de valorar.
   - El margen es el promedio simple de los márgenes por período, redondeado a
     cuatro decimales en decimal, que son dos decimales de porcentaje.
 """
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,6 +55,10 @@ ENCODING = "latin-1"
 # La senda histórica llega de Bloomberg: la fila 6 son los títulos y los datos
 # empiezan en la 7, con la fecha en la columna A y el valor en la B.
 FILA_INICIAL_HISTORICO = 7
+
+# Días de senda histórica que entran en la huella del caché. El margen solo consulta
+# el período en curso, que empezó como mucho un mes antes; dos meses dan margen.
+DIAS_SENDA_EN_HUELLA = 62
 
 
 class IBRFormatError(Exception):
@@ -79,6 +91,19 @@ def dias_360(desde: dt.date, hasta: dt.date) -> int:
     return (hasta.year - desde.year) * 360 + (hasta.month - desde.month) * 30 + (d2 - d1)
 
 
+def fecha_del_indice(fecha_cupon: dt.date, meses: int = 1) -> dt.date:
+    """Inicio del período del cupón que se paga en `fecha_cupon`.
+
+    Se retrocede un período conservando el número del día. Si ese día no existe en
+    el mes destino se recorta al último: el 31 de diciembre lee el 30 de noviembre,
+    y el 29 de marzo lee el 28 de febrero en un año no bisiesto.
+
+    Es la fecha en la que quedó fijada la tasa del período, que es lo que significa
+    la modalidad «Previa».
+    """
+    return fecha_cupon - relativedelta(months=meses)
+
+
 def cronograma(vencimiento: dt.date, fecha_val: dt.date,
                pagos_por_anio: int = PAGOS_POR_ANIO) -> list[dt.date]:
     """Fechas de flujo posteriores a la valoración, ancladas en el vencimiento.
@@ -104,26 +129,34 @@ def cronograma(vencimiento: dt.date, fecha_val: dt.date,
 # ----------------------------------------------------------------------------
 
 def margen_atajo(*, fecha_val: dt.date, vencimiento: dt.date, tir: float,
-                 ibr_previo: float, curva: dict[dt.date, float],
+                 historico: dict[dt.date, float], curva: dict[dt.date, float],
                  pagos_por_anio: int = PAGOS_POR_ANIO) -> float | None:
-    """Margen nominal sobre IBR. Devuelve None si falta algún punto de curva.
+    """Margen nominal sobre IBR. Devuelve None si falta algún punto de índice.
 
-    `tir`, `ibr_previo` y el resultado van en decimal (0,1352 = 13,52 %).
+    `tir` y el resultado van en decimal (0,1352 = 13,52 %). `historico` es la senda
+    diaria publicada y `curva` la forward del día hábil anterior.
+
+    La fecha se busca exacta: si la senda no trae el día en que quedó fijada la tasa
+    de un período —un festivo, un fin de semana— el margen no se calcula, en lugar de
+    sustituirlo por el de otro día.
     """
     flujos = cronograma(vencimiento, fecha_val, pagos_por_anio)
     if not flujos:
         return None
 
+    meses = 12 // pagos_por_anio
     j_prev = l_prev = 0
     margenes = []
-    for i, fecha in enumerate(flujos):
+    for fecha in flujos:
         j = dias_act365(fecha_val, fecha)
         l = dias_360(fecha_val, fecha)
         if l <= l_prev:
             return None
-        # La tasa se lee al inicio del período: el primer flujo contra el IBR
-        # previo y los demás contra la curva en el flujo anterior.
-        n = ibr_previo if i == 0 else curva.get(flujos[i - 1])
+        # «Previa»: la tasa del período se fijó al empezarlo, un período antes del
+        # pago. Si eso cae en o antes de la valoración es un dato publicado y sale
+        # de la senda; si cae después, es proyección y sale de la curva.
+        inicio = fecha_del_indice(fecha, meses)
+        n = historico.get(inicio) if inicio <= fecha_val else curva.get(inicio)
         if n is None:
             return None
         z = ((1 + tir) ** ((j - j_prev) / 365) - 1) * 360 / (l - l_prev)
@@ -266,23 +299,34 @@ class FuenteIBR:
 
     def huella(self, fecha: dt.date) -> str:
         """Identifica los insumos de una fecha, para que el caché se invalide
-        cuando cambien."""
+        cuando cambien.
+
+        De la senda histórica se resume la ventana que el margen llega a consultar
+        —los dos meses anteriores a la fecha, de donde salen las lecturas de los
+        períodos ya empezados— y no solo el valor del propio día.
+        """
         if not self.activa:
             return "sin-curvas"
         ruta = self.ruta_curva_usada(fecha)
         if ruta is None:
             return "sin-archivo"
         st = ruta.stat()
-        return f"{ruta.name}:{st.st_size}:{int(st.st_mtime)}:{self.previo(fecha)}"
+        desde = fecha - dt.timedelta(days=DIAS_SENDA_EN_HUELLA)
+        ventana = sorted((f, v) for f, v in self.historico.items() if desde <= f <= fecha)
+        digest = hashlib.md5(repr(ventana).encode()).hexdigest()[:12]
+        return f"{ruta.name}:{st.st_size}:{int(st.st_mtime)}:{digest}"
 
-    def para_fecha(self, fecha: dt.date) -> tuple[dict[dt.date, float], float] | None:
-        """Curva del día hábil anterior e IBR previo de la propia fecha, o None si
-        falta alguno de los dos."""
+    def para_fecha(self, fecha: dt.date) -> tuple[dict[dt.date, float],
+                                                  dict[dt.date, float]] | None:
+        """Curva del día hábil anterior y senda histórica, o None si falta alguna.
+
+        La senda va entera: el margen lee de ella el día en que se fijó la tasa de
+        cada período ya empezado, que puede ser cualquiera del mes anterior.
+        """
         ruta = self.ruta_curva_usada(fecha)
-        previo = self.previo(fecha)
-        if ruta is None or previo is None:
+        if ruta is None or self.previo(fecha) is None:
             return None
-        return leer_curva(ruta), previo
+        return leer_curva(ruta), self.historico
 
     def motivo_faltante(self, fecha: dt.date) -> str | None:
         """Por qué no hay margen para esta fecha, en texto para el reporte."""

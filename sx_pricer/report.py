@@ -756,10 +756,16 @@ function tablaBloque(filas, bloque){
   // vacío. Si la ventana no tiene títulos, el margen falta por otra razón y ahí
   // va el punto medio, como en el resto de la fila.
   var faltaCurva = { t1: !!(rt1().ibr || {}).motivo, t: !!(rt().ibr || {}).motivo };
-  var celdaMargen = function(v, fecha, sep){
+  var celdaMargen = function(v, fecha, sep, hayTitulos){
     var c = sep ? 'sep' : '';
     if(v !== null) return '<td class="' + c + '">' + pct(v, 2) + '</td>';
     if(faltaCurva[fecha]) return '<td class="' + c + ' sincurva">sin curva</td>';
+    // La ventana tiene títulos y hay curva, así que lo que faltó fue el IBR del día
+    // en que se fijó la tasa de algún período: un festivo o un fin de semana. Se
+    // busca la fecha exacta y no se sustituye por la de otro día.
+    if(hayTitulos) return '<td class="' + c + ' sincurva" title="No hay IBR ' +
+      'publicado en el día en que se fijó la tasa de algún período de este ' +
+      'rango.">sin dato</td>';
     return '<td class="' + c + ' neutro">' + SX.VACIO + '</td>';
   };
 
@@ -781,7 +787,8 @@ function tablaBloque(filas, bloque){
       '<td class="sep">' + pct(r.tasaT1) + '</td><td>' + pct(r.tasaT) + '</td>' +
       '<td class="' + clase(r.dTasa) + '">' + bps(r.dTasa) + '</td>';
     if(conMargen){
-      fila += celdaMargen(r.margenT1, 't1', true) + celdaMargen(r.margenT, 't', false) +
+      fila += celdaMargen(r.margenT1, 't1', true, r.nT1 > 0) +
+        celdaMargen(r.margenT, 't', false, r.nT > 0) +
         (r.dMargen === null ? '<td class="neutro">' + SX.VACIO + '</td>'
                             : '<td class="' + clase(r.dMargen) + '">' + bps(r.dMargen) + '</td>');
     }
