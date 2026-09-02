@@ -394,6 +394,23 @@ recompuesta desde el margen del atajo: difieren hasta 48 pb en los plazos largos
 el atajo descuenta contra la curva forward completa y aquí se recompone con un solo valor
 de IBR. En IPC y en tasa fija coinciden exactamente.
 
+## Tasa y margen, en columnas aparte
+
+Los dos bloques indexados muestran **las dos medidas del mismo nodo**, cada una con sus
+tres columnas (T-1, T y Δ pb): primero la **tasa** de valoración tal como la envía el
+proveedor, y enseguida el margen —el **margen real** en IPC, el del atajo de la bvc en
+IBR—. La gráfica lleva un conmutador para ver una u otra serie, y abre en la que define
+cada bloque: IPC en su margen real, IBR en la tasa.
+
+Tenerlas juntas importa porque **sus dos Δ pb no tienen por qué coincidir**. El de la
+tasa es movimiento de mercado y nada más. El del margen real absorbe además la
+diferencia entre el IPC de T-1 y el de T, así que con IPC distintos en las dos fechas
+las dos columnas cuentan cosas distintas, y esa distancia es justamente la que se quiere
+poder leer.
+
+Editar el IPC en la barra de arriba mueve el margen real y deja la tasa quieta: el IPC
+no entra en la cifra del proveedor.
+
 ## Margen sobre IBR, por el atajo de la bvc
 
 El bloque de IBR trae, junto a la TIR, el **margen nominal sobre IBR** calculado con el
@@ -449,7 +466,7 @@ en la cabecera: están en las listas de la barra de parámetros.
 
 | Pestaña | Contenido |
 |---|---|
-| **Curvas por rango de plazo** | los bloques de tasa fija, IPC e IBR (este con margen y conmutador TIR/Margen), cada uno con CDT, CDT HY y BONO |
+| **Curvas por rango de plazo** | los bloques de tasa fija, IPC e IBR (los dos indexados con su margen en columnas aparte y conmutador de serie en la gráfica), cada uno con CDT, CDT HY y BONO |
 | **Rentabilidades esperadas** | HPR del CDT sintético de cada rango a 90 días, 180 días y al vencimiento, por escenario y con delta |
 | **Comparación y control** | el resumen del par, la cinta del archivo, el embudo de exclusiones, la tabla de TES y la calidad de datos |
 
@@ -501,8 +518,8 @@ vecinas, de modo que quedan pegadas. Sobre el eje de plazo los nodos quedan repa
 parejo por construcción —son ventanas mensuales—, así que el ancho es prácticamente
 uniforme: unos 8 píxeles en tasa fija y 18 en los bloques a tres años, con la variación
 que dejan los meses de distinta duración. En el
-bloque de IBR la barra sigue la serie que muestre el conmutador: si está en «Margen», la
-diferencia es de margen y no de tasa. La gráfica de TES no lleva barras.
+En los dos bloques indexados la barra sigue la serie que muestre el conmutador: si está
+en «Margen», la diferencia es de margen y no de tasa. La gráfica de TES no lleva barras.
 
 Las series de las gráficas se distinguen por **cuatro luminancias distintas** y no solo
 por matiz, de modo que siguen leyéndose impresas en gris o por alguien con deficiencia
@@ -617,7 +634,7 @@ donde el corte no cambió.
 | IPC en T y T-1, tasa BanRep | editables en pantalla |
 | DTF, DTE e IB3 | se eliminan del universo (116 registros en T) |
 | IBR (IB1) | bloque propio, con la TIR sin convertir y el margen por el atajo de la bvc en columnas aparte |
-| Deuda privada (FS e IPC) | plazo, duración, cupón, tasa o margen con su Δ, y muestra. Sin curva TES de referencia, sin spread y sin inflación implícita |
+| Deuda privada (FS e IPC) | plazo, duración, cupón, tasa con su Δ —y en IPC además el margen real con el suyo— y muestra. Sin curva TES de referencia, sin spread y sin inflación implícita |
 | Curva TES | descriptiva: condiciones faciales, plazo, duración, precio, valoración y su diferencia. Única medida derivada: DV01. Sin ajuste logarítmico, sin spreads, sin implícita, sin carry, sin extrapolación |
 | Nemotécnicos CINAS y TDS | fuera de la tabla de TES (llegan con tasa y duración en cero) |
 | Corte de los bloques | ventanas mensuales de vencimiento, con la ventana de fechas en la primera columna |
@@ -675,8 +692,10 @@ par (precio sucio entre 100,3 y 101,6), así que proyectar solo el spread facial
 el precio teórico once puntos por debajo del real y sobrestimaba la duración.
 **5. Los bloques de deuda privada son autónomos.**
 No llevan curva TES de referencia, spread de crédito ni inflación implícita. Cada
-bloque se lee por sí mismo: plazo, duración, cupón, tasa o margen, su diferencia entre
-fechas y el tamaño de la muestra.
+bloque se lee por sí mismo: plazo, duración, cupón, tasa, su diferencia entre fechas y
+el tamaño de la muestra. En los dos bloques indexados la medida comparable va en su
+propio grupo de columnas, al lado de la tasa: el margen real en IPC y el del atajo de
+la bvc en IBR.
 
 **6. La tabla de TES no lleva medidas derivadas más allá del DV01.**
 Sin el ajuste logarítmico que el libro traía escrito a mano en las celdas, sin spread

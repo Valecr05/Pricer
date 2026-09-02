@@ -195,9 +195,12 @@ BLOCKS: tuple[BlockSpec, ...] = (
     BlockSpec("fs", "Tasa fija (FS)", "FS", "TV", anios=7),
     BlockSpec(
         "ipc", "Indexado a IPC", "IPC", "TV", anios=3,
-        nota="El margen real es (1 + tasa) / (1 + IPC) − 1, con el IPC de cada fecha "
-             "que esté puesto en la barra de arriba. El cupón de este bloque es el "
-             "spread facial sobre inflación, no una tasa nominal."),
+        nota="La columna de tasa es la valoración efectiva anual tal como la envía el "
+             "proveedor; el IPC de pantalla no la mueve. El margen real, al lado, es "
+             "(1 + tasa) / (1 + IPC) − 1 con el IPC de cada fecha que esté puesto en "
+             "la barra de arriba, así que sus dos Δ solo coinciden si las dos fechas "
+             "comparten IPC. El cupón de este bloque es el spread facial sobre "
+             "inflación, no una tasa nominal."),
     BlockSpec(
         "ibr", "Indexado a IBR (IB1)", "IB1", "MV", margen_atajo=True, anios=3,
         nota="La columna de tasa es la valoración efectiva anual tal como la envía el "

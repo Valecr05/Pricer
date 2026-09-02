@@ -886,6 +886,8 @@ def test_el_navegador_calcula_lo_mismo_que_python(reporte, valoraciones):
               ("dur_t", "durT", 1e-6), ("dur_t1", "durT1", 1e-6),
               ("cupon_t", "cuponT", 1e-6), ("tasa_t", "tasaT", 1e-12),
               ("tasa_t1", "tasaT1", 1e-12), ("d_tasa", "dTasa", 1e-8),
+              ("bruta_t", "brutaT", 0), ("bruta_t1", "brutaT1", 0),
+              ("d_bruta", "dBruta", 1e-8),
               ("n_t", "nT", 0), ("n_t1", "nT1", 0)]
     comparadas = 0
     for spec in BLOCKS:
@@ -923,6 +925,54 @@ def test_el_navegador_calcula_lo_mismo_que_python(reporte, valoraciones):
                               ("tasa_t1", "tasaT1", 0), ("d_tasa", "dTasa", 1e-9),
                               ("dv01", "dv01", 0.02), ("cupon", "cupon", 1e-6)]:
             assert igual(r[cpy], k[cjs], tol), (isin, cpy)
+
+
+def test_los_bloques_indexados_llevan_tasa_y_margen():
+    """En IPC la tasa del proveedor va en su propio grupo, antes del margen real.
+
+    Es la misma disposición del bloque de IBR: dos medidas del mismo nodo, cada una
+    con sus tres columnas. La tasa no depende del IPC de pantalla y el margen real
+    sí, así que sus dos Δ pb no tienen por qué coincidir.
+    """
+    from sx_pricer.report import JS
+
+    # el grupo nuevo solo aparece en los indexados, y antes del margen real
+    assert ("(indexado ? '<th class=\"grupo\" colspan=\"3\">Tasa</th>' : '') +\n"
+            "    '<th class=\"grupo\" colspan=\"3\">' + (indexado ? 'Margen real' : 'Tasa')") in JS
+    # y lo alimenta la tasa sin convertir, con su propia diferencia
+    assert "pct(r.brutaT1)" in JS and "pct(r.brutaT)" in JS and "clase(r.dBruta)" in JS
+    # el conmutador de la gráfica se extiende al bloque indexado a IPC
+    assert "var conmuta = b.margenAtajo || b.indexado;" in JS
+    assert "b.indexado ? 'Tasa' : 'TIR'" in JS
+    # cada bloque abre en su propia serie: IPC en el margen real, IBR en la tasa
+    assert "function serieDeBloque(b){ return b.indexado ? 'margen' : 'tir'; }" in JS
+
+
+def test_la_tasa_del_nodo_no_depende_del_ipc():
+    """La tasa sin convertir es la del proveedor: el IPC de pantalla no la mueve.
+
+    El margen real sí, y por eso van en columnas distintas.
+    """
+    import subprocess
+    if NODE is None:
+        pytest.skip("node no disponible")
+    from sx_pricer.report import JS_CALC
+    fuente = JS_CALC + """
+var D = { bloques: [{ id: 'ipc', indexado: true, meses: 1 }], config: { minTitulos: 3 } };
+var r = { anclas: ['2026-07-28', '2026-08-28'],
+          nodos: { 'ipc|CDT': { dur: [1], cupon: [3], bruta: [0.11], n: [5] } } };
+var a = SX.nodos(D, r, r, 'ipc', 'CDT', 0.0614, 0.0614)[0];
+var b = SX.nodos(D, r, r, 'ipc', 'CDT', 0.09, 0.09)[0];
+process.stdout.write(JSON.stringify([a.brutaT, a.tasaT, b.brutaT, b.tasaT, a.dBruta]));
+"""
+    salida = subprocess.run([NODE, "-e", fuente], capture_output=True, text=True,
+                            check=True).stdout
+    bruta_a, margen_a, bruta_b, margen_b, d_bruta = json.loads(salida)
+    assert bruta_a == bruta_b == 0.11              # el IPC no toca la tasa
+    assert margen_a != margen_b                    # pero sí el margen real
+    assert margen_a == pytest.approx(1.11 / 1.0614 - 1, abs=1e-12)
+    assert margen_b == pytest.approx(1.11 / 1.09 - 1, abs=1e-12)
+    assert d_bruta == 0                            # misma fecha contra sí misma
 
 
 def test_las_graficas_usan_el_plazo_en_el_eje_x():
@@ -1335,21 +1385,22 @@ def test_la_interfaz_muestra_el_margen_ibr(reporte_con_curvas):
                                   capture_output=True, text=True, check=True).stdout)
     assert d["errores"] == []
 
-    # el conmutador existe solo donde hay margen
-    familias_ibr = len(next(b for b in BLOCKS if b.id == "ibr").familias)
-    assert d["conmutadores"]["botones"] == 2 * familias_ibr
-    assert set(d["conmutadores"]["etiquetas"]) == {"TIR", "Margen"}
+    # el conmutador está en los dos bloques que tienen dos medidas del mismo nodo
+    con_dos = [b for b in BLOCKS if b.margen_atajo or b.indicador in ("IPC", "ICP", "IP4")]
+    assert d["conmutadores"]["botones"] == 2 * sum(len(b.familias) for b in con_dos)
+    assert set(d["conmutadores"]["etiquetas"]) == {"TIR", "Tasa", "Margen"}
     # el conmutador nunca se esconde: si una fecha no tiene margen queda visible y
     # deshabilitado con el motivo en el titulo, en vez de desaparecer sin explicacion
     assert d["conmutadores"]["deshabilitados"] == d["conmutadores"]["conTitulo"]
     assert d["tablaFs"]["conmutadores"] == 0
 
-    # cambiar la serie redibuja: solo T tiene curva, así que quedan la mitad de puntos
+    # el bloque de IBR abre en la tasa y conmuta al margen del atajo
     g = d["grafica"]
-    assert g["tirEje"] == "Tasa" and g["margenEje"] == "Margen sobre IBR"
-    assert g["margenPuntos"] == g["tirPuntos"]      # ambas fechas con margen
-    assert g["pressedMargen"] == "true"
-    assert g["vuelveATir"] == g["tirPuntos"]
+    assert g["id"].startswith("ch-ibr-")
+    assert g["porDefectoEje"] == "Tasa" and g["otraEje"] == "Margen sobre IBR"
+    assert g["otraPuntos"] == g["porDefectoPuntos"]     # ambas fechas con margen
+    assert g["pressedOtra"] == "true"
+    assert g["vuelvePuntos"] == g["porDefectoPuntos"]
 
     # tres columnas más en el bloque de IBR y ninguna en el de tasa fija
     assert d["tablaIbr"]["celdas"] == d["tablaFs"]["celdas"] + 3
@@ -1359,6 +1410,33 @@ def test_la_interfaz_muestra_el_margen_ibr(reporte_con_curvas):
     assert d["tablaIbr"]["sinCurva"] == 0
     assert d["tablaFs"]["sinCurva"] == 0
     assert any("curva del día hábil anterior" in n for n in d["tablaIbr"]["notas"])
+
+
+@pytest.mark.skipif(not JSDOM, reason="jsdom no instalado (npm install jsdom)")
+@tiene_datos
+def test_la_interfaz_muestra_la_tasa_en_el_bloque_de_ipc(reporte):
+    """El bloque de IPC lleva la tasa del proveedor junto al margen real.
+
+    No necesita curvas de IBR: la tasa sale del propio plano.
+    """
+    import subprocess
+    guion = Path(__file__).parent / "verificar_dom.js"
+    d = json.loads(subprocess.run([NODE, str(guion), str(reporte)], cwd=RAIZ,
+                                  capture_output=True, text=True, check=True).stdout)
+    assert d["errores"] == []
+
+    # tres columnas más que en tasa fija, y el grupo nuevo antes del margen real
+    assert d["tablaIpc"]["celdas"] == d["tablaFs"]["celdas"] + 3
+    grupos = d["tablaIpc"]["encabezados"][:7]
+    assert grupos.index("Tasa") < grupos.index("Margen real")
+
+    # la gráfica abre en el margen real, conmuta a la tasa y vuelve
+    g = d["graficaIpc"]
+    assert g["id"].startswith("ch-ipc-")
+    assert g["porDefectoEje"] == "Margen real" and g["otraEje"] == "Tasa"
+    assert g["otraPuntos"] == g["porDefectoPuntos"]
+    assert g["pressedOtra"] == "true"
+    assert g["vuelveEje"] == "Margen real"
 
 
 @tiene_datos

@@ -129,7 +129,7 @@ salida.trasCambiarFecha = { t1: otra, estado: estado() };
 $('tab-datos').click();
 salida.trasCambiarFechaYAbrirDatos = estado();
 
-// --- conmutador TIR / Margen del bloque con margen sobre IBR ---
+// --- conmutadores de serie: IPC (Tasa / Margen real) e IBR (TIR / Margen) ---
 // Acotado a los bloques: la pestaña de rentabilidades usa la misma clase de botón.
 const conMargen = [...doc.querySelectorAll('#bloques .tg')]
   .filter((b) => !b.disabled || b.dataset.serie === 'margen');
@@ -141,22 +141,32 @@ salida.conmutadores = {
   deshabilitados: conMargen.filter((b) => b.disabled).length,
   conTitulo: conMargen.filter((b) => b.disabled && b.getAttribute('title')).length
 };
-if (conMargen.length) {
-  const gid = conMargen[0].dataset.gr;
+// Cada bloque abre en su propia serie, asi que se recorre en el orden en que el
+// conmutador la cambia: primero la que trae por defecto y luego la otra.
+const conmutar = (gid, desde, hacia) => {
   const puntos = () => grafica(gid).puntos;
   const yLabel = () => {
     const t = [...$(gid).querySelectorAll('text')].map((e) => e.textContent);
     return t.find((x) => /Tasa|Margen/i.test(x)) || null;
   };
-  salida.grafica = { id: gid, tirPuntos: puntos(), tirEje: yLabel() };
-  doc.querySelector(`.tg[data-gr="${gid}"][data-serie="margen"]`).click();
-  salida.grafica.margenPuntos = puntos();
-  salida.grafica.margenEje = yLabel();
-  salida.grafica.pressedMargen =
-    doc.querySelector(`.tg[data-gr="${gid}"][data-serie="margen"]`).getAttribute('aria-pressed');
-  doc.querySelector(`.tg[data-gr="${gid}"][data-serie="tir"]`).click();
-  salida.grafica.vuelveATir = puntos();
-}
+  const pulsar = (serie) => doc.querySelector(`.tg[data-gr="${gid}"][data-serie="${serie}"]`);
+  const out = { id: gid, porDefectoEje: yLabel(), porDefectoPuntos: puntos(),
+                pressedPorDefecto: pulsar(desde).getAttribute('aria-pressed') };
+  pulsar(hacia).click();
+  out.otraEje = yLabel();
+  out.otraPuntos = puntos();
+  out.pressedOtra = pulsar(hacia).getAttribute('aria-pressed');
+  pulsar(desde).click();                 // y vuelve a la de por defecto
+  out.vuelvePuntos = puntos();
+  out.vuelveEje = yLabel();
+  return out;
+};
+const primera = (prefijo) => (conMargen.find((b) => b.dataset.gr.startsWith(prefijo)) || {})
+  .dataset?.gr || null;
+const gidIbr = primera('ch-ibr-'), gidIpc = primera('ch-ipc-');
+// IBR abre en la tasa y conmuta al margen del atajo; IPC al reves
+if (gidIbr) salida.grafica = conmutar(gidIbr, 'tir', 'margen');
+if (gidIpc) salida.graficaIpc = conmutar(gidIpc, 'margen', 'tir');
 
 // --- columnas de margen y celdas «sin curva» ---
 const filaIbr = doc.querySelector('#idx-ibr table tbody tr');
@@ -165,6 +175,11 @@ salida.tablaIbr = {
   encabezados: [...doc.querySelectorAll('#idx-ibr table thead th.grupo')].map((e) => e.textContent.trim()),
   sinCurva: doc.querySelectorAll('#idx-ibr td.sincurva').length,
   notas: [...doc.querySelectorAll('#idx-ibr .nota-tabla')].map((e) => e.textContent.trim().slice(0, 220))
+};
+const filaIpc = doc.querySelector('#idx-ipc table tbody tr');
+salida.tablaIpc = {
+  celdas: filaIpc ? filaIpc.children.length : 0,
+  encabezados: [...doc.querySelectorAll('#idx-ipc table thead th.grupo')].map((e) => e.textContent.trim())
 };
 const filaFs = doc.querySelector('#idx-fs table tbody tr');
 salida.tablaFs = { celdas: filaFs ? filaFs.children.length : 0,

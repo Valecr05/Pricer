@@ -325,8 +325,10 @@ function nodos(D, rt, rt1, blockId, familia, ipcT, ipcT1){
   var anclaT = rt.anclas, anclaT1 = rt1.anclas;
   var out = [];
   for(var i = 0; i < bloque.meses; i++){
-    var mt = a ? margen(a.bruta[i], ipcT, ix) : null;
-    var m1 = p ? margen(p.bruta[i], ipcT1, ix) : null;
+    var bt = a && a.bruta[i] !== undefined ? a.bruta[i] : null;
+    var b1 = p && p.bruta[i] !== undefined ? p.bruta[i] : null;
+    var mt = margen(bt, ipcT, ix);
+    var m1 = margen(b1, ipcT1, ix);
     var nT = a ? a.n[i] : 0, n1 = p ? p.n[i] : 0;
     // El margen sobre IBR se calcula al procesar, con la curva del propio dia:
     // aqui solo se lee. Si falta la curva de una fecha, viene nulo.
@@ -349,6 +351,11 @@ function nodos(D, rt, rt1, blockId, familia, ipcT, ipcT1){
       plazoT1: diasEntre(anclaT1[0], anclaT1[i + 1]) / 365,
       durT: a ? a.dur[i] : null, durT1: p ? p.dur[i] : null,
       cuponT: a ? a.cupon[i] : null,
+      // la tasa de valoracion tal como la envia el proveedor, sin convertir. En
+      // los bloques indexados a IPC es la que acompania al margen real; el IPC de
+      // pantalla no la mueve.
+      brutaT: bt, brutaT1: b1,
+      dBruta: (bt === null || b1 === null) ? null : (bt - b1) * 1e4,
       tasaT: mt, tasaT1: m1,
       dTasa: (mt === null || m1 === null) ? null : (mt - m1) * 1e4,
       margenT: gT, margenT1: g1,
@@ -661,15 +668,18 @@ function embudo(r){
 
 function idChart(id, fam){ return 'ch-' + id + '-' + fam.replace(/\s+/g, '_'); }
 
-// Serie que muestra cada gráfica: 'tir' o 'margen'. Solo los bloques con margen
-// sobre IBR ofrecen la alternativa; el resto se queda siempre en 'tir'.
+// Serie que muestra cada gráfica: 'tir' o 'margen'. La ofrecen los dos bloques que
+// tienen las dos medidas —IPC, con su margen real, e IBR, con el del atajo—; el de
+// tasa fija no, porque ahí la tasa es lo único que hay. Cada uno abre en la suya:
+// IPC en el margen real, que es su medida comparable, e IBR en la tasa.
 var serieDe = {};
-function serieGrafica(id){ return serieDe[id] || 'tir'; }
+function serieGrafica(id, porDefecto){ return serieDe[id] || porDefecto || 'tir'; }
+function serieDeBloque(b){ return b.indexado ? 'margen' : 'tir'; }
 // El conmutador nunca se esconde: si la fecha no tiene margen queda a la vista pero
 // deshabilitado, con el motivo en el titulo. Ocultarlo hacia que el boton
 // desapareciera sin explicacion cuando faltaba la curva del dia hábil anterior.
-function conmutador(id, hayMargen, motivo){
-  var v = hayMargen ? serieGrafica(id) : 'tir';
+function conmutador(id, hayMargen, motivo, porDefecto, textoTasa){
+  var v = hayMargen ? serieGrafica(id, porDefecto) : 'tir';
   var boton = function(clave, texto){
     var apagado = !hayMargen && clave === 'margen';
     return '<button type="button" class="tg" data-gr="' + id + '" data-serie="' + clave +
@@ -677,7 +687,7 @@ function conmutador(id, hayMargen, motivo){
       (apagado ? ' title="' + esc(motivo) + '"' : '') + '>' + texto + '</button>';
   };
   return '<span class="toggle" role="group" aria-label="Serie de la gráfica">' +
-         boton('tir', 'TIR') + boton('margen', 'Margen') + '</span>';
+         boton('tir', textoTasa) + boton('margen', 'Margen') + '</span>';
 }
 function cablearConmutadores(){
   [].forEach.call(document.querySelectorAll('.tg'), function(b){
@@ -703,12 +713,16 @@ function renderBloques(){
       var filas = nodos(b.id, fam);
       var conDato = filas.filter(function(r){ return r.nT > 0; }).length;
       var gid = idChart(b.id, fam);
-      var hayMargen = b.margenAtajo && filas.some(function(r){ return r.margenT !== null; });
+      var conmuta = b.margenAtajo || b.indexado;
+      var hayMargen = b.indexado
+        ? filas.some(function(r){ return r.tasaT !== null; })
+        : (b.margenAtajo && filas.some(function(r){ return r.margenT !== null; }));
       var motivoMargen = 'Sin margen para ' + S.t + ': ' +
         ((rt().ibr || {}).motivo || 'no hay nodos con margen en esta fecha');
       cuerpo += '<div class="card"><div class="card-hd"><h3>' + esc(fam) + '</h3>' +
         '<span class="pill n">' + esc(filtro) + '</span>' +
-        (b.margenAtajo ? conmutador(gid, hayMargen, motivoMargen) : '') +
+        (conmuta ? conmutador(gid, hayMargen, motivoMargen, serieDeBloque(b),
+                              b.indexado ? 'Tasa' : 'TIR') : '') +
         '<span class="meta">' + conDato + ' nodos con dato</span></div>' +
         '<div class="chart" id="' + gid + '"></div>' + leyenda() +
         tablaBloque(filas, b) + '</div>';
@@ -725,10 +739,15 @@ function tablaBloque(filas, bloque){
   var grupos = '<tr><th class="grupo" colspan="2">Ventana de vencimientos</th>' +
     '<th class="grupo" colspan="3">Rejilla (días)</th>' +
     '<th class="grupo" colspan="2">Duración (años)</th><th class="grupo">Cupón</th>' +
+    // en los indexados a IPC la tasa del proveedor va aparte del margen real, como
+    // en el bloque de IBR: son dos medidas distintas del mismo nodo
+    (indexado ? '<th class="grupo" colspan="3">Tasa</th>' : '') +
     '<th class="grupo" colspan="3">' + (indexado ? 'Margen real' : 'Tasa') + '</th>' +
     (conMargen ? '<th class="grupo" colspan="3">Margen sobre IBR (atajo bvc)</th>' : '') +
     '<th class="grupo" colspan="2">Muestra</th></tr>';
-  var cols = ['Fechas (T)', 'Rango', 'Δ D T', 'Día T-1', 'Día T', 'T-1', 'T', 'T', 'T-1', 'T', 'Δ pb']
+  var cols = ['Fechas (T)', 'Rango', 'Δ D T', 'Día T-1', 'Día T', 'T-1', 'T', 'T']
+    .concat(indexado ? ['T-1', 'T', 'Δ pb'] : [])
+    .concat(['T-1', 'T', 'Δ pb'])
     .concat(conMargen ? ['T-1', 'T', 'Δ pb'] : [])
     .concat(['n T-1', 'n T']);
   var cab = '<tr>' + cols.map(function(c){ return '<th>' + esc(c) + '</th>'; }).join('') + '</tr>';
@@ -755,6 +774,10 @@ function tablaBloque(filas, bloque){
       '<td>' + fmt(r.diaT1, 0) + '</td><td>' + fmt(r.diaT, 0) + '</td>' +
       '<td class="sep">' + fmt(r.durT1, 3) + '</td><td>' + fmt(r.durT, 3) + '</td>' +
       '<td class="sep">' + fmt(r.cuponT, 3) + ' %</td>' +
+      (indexado
+        ? '<td class="sep">' + pct(r.brutaT1) + '</td><td>' + pct(r.brutaT) + '</td>' +
+          '<td class="' + clase(r.dBruta) + '">' + bps(r.dBruta) + '</td>'
+        : '') +
       '<td class="sep">' + pct(r.tasaT1) + '</td><td>' + pct(r.tasaT) + '</td>' +
       '<td class="' + clase(r.dTasa) + '">' + bps(r.dTasa) + '</td>';
     if(conMargen){
@@ -1091,12 +1114,21 @@ function dibujarUnBloque(gid){
     b.familias.forEach(function(fam){
       if(idChart(b.id, fam) !== gid) return;
       var filas = nodos(b.id, fam);
+      var vista = serieGrafica(gid, serieDeBloque(b));
       var hayMg = filas.some(function(r){ return r.margenT !== null; });
-      var esMargen = hayMg && serieGrafica(gid) === 'margen';
-      var campoT = esMargen ? 'margenT' : 'tasaT';
-      var campoT1 = esMargen ? 'margenT1' : 'tasaT1';
-      var etiqueta = esMargen ? 'Margen sobre IBR'
-                              : (b.indexado ? 'Margen real' : 'Tasa');
+      // En IPC las dos series salen de la misma fila: «tasa» es la del proveedor y
+      // «margen» el margen real. En IBR el margen es el del atajo, que puede faltar
+      // si no hay curva, y entonces la grafica se queda en la tasa.
+      var campoT, campoT1, etiqueta;
+      if(b.margenAtajo && hayMg && vista === 'margen'){
+        campoT = 'margenT'; campoT1 = 'margenT1'; etiqueta = 'Margen sobre IBR';
+      } else if(b.indexado && vista === 'tir'){
+        campoT = 'brutaT'; campoT1 = 'brutaT1'; etiqueta = 'Tasa';
+      } else {
+        campoT = 'tasaT'; campoT1 = 'tasaT1';
+        etiqueta = b.indexado ? 'Margen real' : 'Tasa';
+      }
+      var esMargen = campoT === 'margenT';
       var pts = function(cx, ct){
         return filas.filter(function(r){ return r[cx] > 0 && r[ct] !== null; })
                     .map(function(r){ return [r[cx], r[ct]]; })
@@ -1104,7 +1136,7 @@ function dibujarUnBloque(gid){
       };
       // la barra sigue la serie que muestre el conmutador y se ancla en el plazo
       // de T, que es donde cae el punto de la curva de T
-      var campoD = esMargen ? 'dMargen' : 'dTasa';
+      var campoD = esMargen ? 'dMargen' : (campoT === 'brutaT' ? 'dBruta' : 'dTasa');
       var barras = filas.filter(function(r){ return r.plazoT > 0 && r[campoD] !== null; })
                         .map(function(r){ return [r.plazoT, r[campoD]]; });
       dibujar($(gid), {
@@ -1136,8 +1168,8 @@ function bloquePorTipo(id){
 function margenDelNodo(tipo, fila, indiceHoy){
   if(tipo === 'fs') return 0;
   if(tipo === 'ipc'){
-    if(fila.tasaBrutaT === null) return null;
-    return (1 + fila.tasaBrutaT) / (1 + indiceHoy) - 1;
+    if(fila.brutaT === null) return null;
+    return (1 + fila.brutaT) / (1 + indiceHoy) - 1;
   }
   return fila.margenT;
 }
@@ -1150,15 +1182,13 @@ function filasHpr(){
   var indiceHoy = senda ? SX.vigente(senda, S.t, HPR.escenario)[0] : 0;
   var fuera = [], excluidas = [];
   filas.forEach(function(r){
-    var bruta = (rt().nodos[HPR.tipo + '|CDT'].bruta || [])[r.i];
-    r.tasaBrutaT = (bruta === undefined) ? null : bruta;
     var m = margenDelNodo(HPR.tipo, r, indiceHoy);
-    if(r.tasaBrutaT === null || r.cuponT === null || m === null){
+    if(r.brutaT === null || r.cuponT === null || m === null){
       excluidas.push(r); return;
     }
     var venc = SX.sumarDias(r.hastaT, -1);       // fin de ventana
     var res = SX.rentabilidad(D, {
-      tipo: HPR.tipo, fechaVal: S.t, vencimiento: venc, tir: r.tasaBrutaT,
+      tipo: HPR.tipo, fechaVal: S.t, vencimiento: venc, tir: r.brutaT,
       cupon: r.cuponT / 100, margen: m, escenario: HPR.escenario, deltaPb: HPR.delta
     });
     if(!res){ excluidas.push(r); return; }
@@ -1224,7 +1254,7 @@ function tablaHpr(datos, indice, titulo, subtitulo){
       '<td>' + esc(d.venc) + marca + '</td>' +
       '<td class="sep">' + fmt(SX.diasEntre(S.t, d.venc), 0) + '</td>' +
       '<td class="sep">' + fmt(f.cuponT, 3) + ' %</td>' +
-      '<td>' + pct(f.tasaBrutaT) + '</td>' +
+      '<td>' + pct(f.brutaT) + '</td>' +
       '<td>' + (HPR.tipo === 'fs' ? SX.VACIO : pct(d.margen)) + '</td>' +
       celda + '</tr>';
   }).join('');

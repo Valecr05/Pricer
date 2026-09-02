@@ -191,6 +191,9 @@ def comparar_bloque(v_t1: pd.DataFrame, v_t: pd.DataFrame, spec: cfg.BlockSpec,
     t["n_t"], t["n_t1"] = n0["n"], n1["n"]
     t["fragil"] = n0["fragil"] | n1["fragil"]
     t["d_tasa"] = (t["tasa_t"] - t["tasa_t1"]) * BPS
+    # la tasa sin convertir tambien se compara entre fechas: en los bloques indexados
+    # a IPC va en su propia columna, al lado del margen real
+    t["d_bruta"] = (t["bruta_t"] - t["bruta_t1"]) * BPS
 
     return BlockResult(
         spec=spec, familia=familia, tabla=t.reset_index(drop=True),
