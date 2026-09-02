@@ -342,6 +342,11 @@ function nodos(D, rt, rt1, blockId, familia, ipcT, ipcT1){
       diasMesT: diasEntre(anclaT[i], anclaT[i + 1]),
       diaT: diasEntre(anclaT[0], anclaT[i]),
       diaT1: diasEntre(anclaT1[0], anclaT1[i]),
+      // Plazo del nodo, en anios: el nodo vence al final de su ventana, la misma
+      // convencion que ya usan el margen sobre IBR por el atajo de la bvc y las
+      // rentabilidades esperadas. Cada fecha lo mide contra su propia rejilla.
+      plazoT: diasEntre(anclaT[0], anclaT[i + 1]) / 365,
+      plazoT1: diasEntre(anclaT1[0], anclaT1[i + 1]) / 365,
       durT: a ? a.dur[i] : null, durT1: p ? p.dur[i] : null,
       cuponT: a ? a.cupon[i] : null,
       tasaT: mt, tasaT1: m1,
@@ -369,6 +374,8 @@ function tes(D, rt, rt1){
       isin: isin, nemotecnico: c.nemotecnico, grupo: c.grupo, moneda: c.moneda,
       emision: c.emision, vencimiento: c.vencimiento, cupon: c.cupon,
       dias: rt.tes.dias[i], anios: rt.tes.dias[i] / 365,
+      // el plazo se acorta entre las dos fechas: cada serie usa el suyo
+      aniosT1: rt1.tes.dias[j] === null ? null : rt1.tes.dias[j] / 365,
       durT: rt.tes.dur[i], durT1: rt1.tes.dur[j], dm: dm,
       precioT: precio, precioT1: rt1.tes.precio[j],
       tasaT: tT, tasaT1: t1,
@@ -881,25 +888,25 @@ function renderTes(){
       '<td class="sep">' + fmt(r.dv01, 0) + '</td></tr>';
   }).join('');
   var series = [
-    { name: 'COP T-1', color: COLORES.copT1, dash: '4 3', points: puntosTes(filas, 'COP', 'durT1', 'tasaT1') },
-    { name: 'COP T',   color: COLORES.copT,  points: puntosTes(filas, 'COP', 'durT', 'tasaT') },
-    { name: 'UVR T-1', color: COLORES.uvrT1, dash: '4 3', points: puntosTes(filas, 'UVR', 'durT1', 'tasaT1') },
-    { name: 'UVR T',   color: COLORES.uvrT,  points: puntosTes(filas, 'UVR', 'durT', 'tasaT') }
+    { name: 'COP T-1', color: COLORES.copT1, dash: '4 3', points: puntosTes(filas, 'COP', 'aniosT1', 'tasaT1') },
+    { name: 'COP T',   color: COLORES.copT,  points: puntosTes(filas, 'COP', 'anios', 'tasaT') },
+    { name: 'UVR T-1', color: COLORES.uvrT1, dash: '4 3', points: puntosTes(filas, 'UVR', 'aniosT1', 'tasaT1') },
+    { name: 'UVR T',   color: COLORES.uvrT,  points: puntosTes(filas, 'UVR', 'anios', 'tasaT') }
   ];
   $('tes-card').innerHTML =
-    '<div class="card-hd"><h3>Valoración observada por duración</h3>' +
+    '<div class="card-hd"><h3>Valoración observada por plazo</h3>' +
     '<span class="meta">' + fmt(filas.length, 0) + ' referencias en las dos fechas</span></div>' +
     '<div class="chart" id="ch-tes"></div>' +
     '<div class="leyenda">' + series.map(function(s){
       return '<span><i style="border-top-color:' + s.color + ';border-top-style:' +
              (s.dash ? 'dashed' : 'solid') + '"></i>' + esc(s.name) + '</span>'; }).join('') +
     '</div><div class="tw"><table><thead>' + grupos + cab + '</thead><tbody>' + cuerpo + '</tbody></table></div>';
-  specTes = { xlabel: 'Duración (años)', ylabel: 'Valoración', series: series };
+  specTes = { xlabel: 'Plazo (años)', ylabel: 'Valoración', series: series };
 }
 function dibujarTes(){ if(specTes) dibujar($('ch-tes'), specTes); }
-function puntosTes(filas, grupo, cd, ct){
-  return filas.filter(function(r){ return r.grupo === grupo && r[cd] > 0 && r[ct] !== null; })
-              .map(function(r){ return [r[cd], r[ct]]; })
+function puntosTes(filas, grupo, cx, ct){
+  return filas.filter(function(r){ return r.grupo === grupo && r[cx] > 0 && r[ct] !== null; })
+              .map(function(r){ return [r[cx], r[ct]]; })
               .sort(function(a, b){ return a[0] - b[0]; });
 }
 
@@ -1007,8 +1014,8 @@ function dibujar(host, spec){
   }
   // Eje derecho y barras de diferencia. La escala va centrada en cero para que el
   // signo se lea de inmediato, y las barras se dibujan ANTES de las lineas para que
-  // queden detras. Cada barra se ancla en la duracion de T y se extiende hasta los
-  // puntos medios con sus vecinas, asi quedan pegadas aunque los nodos no esten
+  // queden detras. Cada barra se ancla en el punto de T y se extiende hasta los
+  // puntos medios con sus vecinas, asi quedan pegadas aunque los puntos no esten
   // repartidos de forma pareja sobre el eje.
   var delta = {};
   if(barras.length){
@@ -1090,21 +1097,21 @@ function dibujarUnBloque(gid){
       var campoT1 = esMargen ? 'margenT1' : 'tasaT1';
       var etiqueta = esMargen ? 'Margen sobre IBR'
                               : (b.indexado ? 'Margen real' : 'Tasa');
-      var pts = function(cd, ct){
-        return filas.filter(function(r){ return r[cd] > 0 && r[ct] !== null; })
-                    .map(function(r){ return [r[cd], r[ct]]; })
+      var pts = function(cx, ct){
+        return filas.filter(function(r){ return r[cx] > 0 && r[ct] !== null; })
+                    .map(function(r){ return [r[cx], r[ct]]; })
                     .sort(function(a, b){ return a[0] - b[0]; });
       };
-      // la barra sigue la serie que muestre el conmutador y se ancla en la
-      // duracion de T, que es donde cae el punto de la curva de T
+      // la barra sigue la serie que muestre el conmutador y se ancla en el plazo
+      // de T, que es donde cae el punto de la curva de T
       var campoD = esMargen ? 'dMargen' : 'dTasa';
-      var barras = filas.filter(function(r){ return r.durT > 0 && r[campoD] !== null; })
-                        .map(function(r){ return [r.durT, r[campoD]]; });
+      var barras = filas.filter(function(r){ return r.plazoT > 0 && r[campoD] !== null; })
+                        .map(function(r){ return [r.plazoT, r[campoD]]; });
       dibujar($(gid), {
-        xlabel: 'Duración (años)', ylabel: etiqueta, barras: barras,
+        xlabel: 'Plazo (años)', ylabel: etiqueta, barras: barras,
         series: [
-          { name: 'T-1', color: COLORES.bloqueT1, dash: '4 3', points: pts('durT1', campoT1) },
-          { name: 'T',   color: COLORES.bloqueT,  points: pts('durT', campoT) }
+          { name: 'T-1', color: COLORES.bloqueT1, dash: '4 3', points: pts('plazoT1', campoT1) },
+          { name: 'T',   color: COLORES.bloqueT,  points: pts('plazoT', campoT) }
         ]
       });
     });

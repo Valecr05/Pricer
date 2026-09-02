@@ -477,6 +477,13 @@ necesidad de una fuente monoespaciada. La única excepción es el registro crudo
 cinta», que sigue en monoespaciada porque ahí el ancho fijo no es estética: es lo que
 hace que los cortes de campo sean ciertos.
 
+El eje X de todas las gráficas —las nueve de bloque y la de TES— es el **plazo, en
+años**. En TES es el plazo del propio título. En los bloques el nodo no es un título
+sino una ventana mensual de vencimientos, así que su plazo es el **final de la
+ventana**: la misma convención con la que ya se le calcula el margen sobre IBR y su
+rentabilidad esperada. Cada fecha lo mide contra su propia rejilla, igual que el resto
+del reporte. La duración no desaparece: sigue en la tabla, en sus dos columnas.
+
 Las gráficas de los tres bloques llevan, además de las dos curvas, **barras con la
 diferencia en puntos básicos entre T y T-1**, en un eje derecho propio. Las diferencias
 son de pocos puntos básicos —entre −10 y +9 en el archivo del 28 de julio— así que en el
@@ -489,10 +496,11 @@ quedaba casi invisible —1,53 de contraste contra el fondo—, así que van al 
 números del eje derecho usan un gris más oscuro, porque el de las barras no alcanza
 contraste para texto.
 
-Cada barra se ancla en la **duración de T** y se extiende hasta los puntos medios con sus
-vecinas, de modo que quedan pegadas. Como los nodos no están repartidos de forma pareja
-sobre el eje de duración, el ancho de cada barra varía: en tasa fija van de 1 a 40 píxeles,
-porque las ventanas cortas se agolpan cerca del origen y las largas se separan. En el
+Cada barra se ancla en el **plazo de T** y se extiende hasta los puntos medios con sus
+vecinas, de modo que quedan pegadas. Sobre el eje de plazo los nodos quedan repartidos
+parejo por construcción —son ventanas mensuales—, así que el ancho es prácticamente
+uniforme: unos 8 píxeles en tasa fija y 18 en los bloques a tres años, con la variación
+que dejan los meses de distinta duración. En el
 bloque de IBR la barra sigue la serie que muestre el conmutador: si está en «Margen», la
 diferencia es de margen y no de tasa. La gráfica de TES no lleva barras.
 

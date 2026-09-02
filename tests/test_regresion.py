@@ -898,6 +898,12 @@ def test_el_navegador_calcula_lo_mismo_que_python(reporte, valoraciones):
                 assert filas[i]["desdeT"] == r["desde_t"].date().isoformat()
                 assert filas[i]["hastaT"] == r["hasta_t"].date().isoformat()
                 assert bool(filas[i]["fragil"]) == bool(r["fragil"])
+                # el plazo del eje X es el final de la ventana, y cada fecha lo
+                # mide contra su propia rejilla
+                assert igual((r["dia_t"] + r["dias_mes_t"]) / 365,
+                             filas[i]["plazoT"], 1e-12), (spec.id, familia, "plazoT")
+                assert igual((r["dia_t1"] + (r["hasta_t1"] - r["desde_t1"]).days) / 365,
+                             filas[i]["plazoT1"], 1e-12), (spec.id, familia, "plazoT1")
                 for cpy, cjs, tol in campos:
                     assert igual(r[cpy], filas[i][cjs], tol), (spec.id, familia,
                                                                r["desde_t"], cpy)
@@ -917,6 +923,27 @@ def test_el_navegador_calcula_lo_mismo_que_python(reporte, valoraciones):
                               ("tasa_t1", "tasaT1", 0), ("d_tasa", "dTasa", 1e-9),
                               ("dv01", "dv01", 0.02), ("cupon", "cupon", 1e-6)]:
             assert igual(r[cpy], k[cjs], tol), (isin, cpy)
+
+
+def test_las_graficas_usan_el_plazo_en_el_eje_x():
+    """Las nueve gráficas de bloque y la de TES llevan el plazo en el eje X.
+
+    En los bloques el nodo no es un título sino una ventana mensual, y su plazo es
+    el final de esa ventana: la misma convención con la que ya se le calcula el
+    margen sobre IBR y su rentabilidad esperada. En TES es el plazo del propio
+    título. La duración sigue estando en las tablas.
+    """
+    from sx_pricer.report import JS
+
+    assert JS.count("xlabel: 'Plazo (años)'") == 2      # bloques y TES
+    assert "xlabel: 'Duración (años)'" not in JS
+    # la duración no desaparece: sigue siendo un par de columnas de la tabla
+    assert '<th class="grupo" colspan="2">Duración (años)</th>' in JS
+    assert "points: pts('plazoT', campoT)" in JS
+    assert "points: pts('plazoT1', campoT1)" in JS
+    assert "[r.plazoT, r[campoD]]" in JS                # las barras se anclan igual
+    assert "puntosTes(filas, 'COP', 'anios', 'tasaT')" in JS
+    assert "puntosTes(filas, 'COP', 'aniosT1', 'tasaT1')" in JS
 
 
 @pytest.mark.skipif(NODE is None, reason="node no disponible")
