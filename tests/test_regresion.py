@@ -1212,6 +1212,60 @@ def test_hpr_controles_de_consistencia(valoraciones):
                 assert x.hpr == pytest.approx(x.tasa_entrada, abs=1e-9), (tipo, i)
 
 
+def test_v0_de_ipc_se_proyecta_con_el_escenario():
+    """En IPC el precio de entrada depende del escenario; en IBR no.
+
+    El cupón de cada período se lee tres meses antes de su pago, también más allá de
+    la valoración, así que la senda entra en V₀. En IBR se sigue aplanando al índice
+    de hoy, y por eso su precio de entrada es el mismo en los tres escenarios.
+    """
+    import datetime as dtm
+    from sx_pricer.escenarios import ESCENARIOS, Escenarios, Senda
+    from sx_pricer import hpr as H
+
+    T, venc = dtm.date(2026, 7, 28), dtm.date(2027, 7, 27)
+    fechas = [dtm.date(2026, 1, 1) + dtm.timedelta(days=30 * k) for k in range(30)]
+
+    def senda(paso):        # las tres coinciden hasta T y divergen después
+        return [0.0614 if f <= T else 0.0614 + paso * ((f - T).days / 30) for f in fechas]
+
+    pasos = {"Alcista": 0.0005, "Base": 0.0, "Bajista": -0.0005}
+    esc = Escenarios(sendas={k: Senda(k, fechas, {e: senda(p) for e, p in pasos.items()})
+                             for k in ("IPC", "IBR")})
+    tir, facial = 0.1107, 0.03
+    margen = (1 + tir) / 1.0614 - 1
+
+    def v0(tipo, escenario, escenarios=esc):
+        kw = dict(tipo=tipo, fecha_val=T, vencimiento=venc, escenarios=escenarios,
+                  escenario=escenario)
+        if tipo == "ipc":
+            return H.calcular(tir=tir, cupon_facial=facial, margen=margen, **kw)
+        return H.calcular(tir=0.128, cupon_facial=0.013, margen=0.013, **kw)
+
+    assert "ipc" in H.V0_CON_ESCENARIO and "ibr" not in H.V0_CON_ESCENARIO
+
+    ipc = {e: v0("ipc", e)[0].v0 for e in ESCENARIOS}
+    assert ipc["Alcista"] > ipc["Base"] > ipc["Bajista"]
+    assert len({round(v, 9) for v in ipc.values()}) == 3
+
+    ibr = {e: v0("ibr", e)[0].v0 for e in ESCENARIOS}
+    assert len({round(v, 9) for v in ibr.values()}) == 1
+
+    # la tasa de entrada sigue siendo la TIR del nodo, venga de donde venga la senda
+    for e in ESCENARIOS:
+        assert v0("ipc", e)[0].tasa_entrada == pytest.approx(tir, abs=1e-12)
+
+    # y con la senda plana los tres vuelven a coincidir, y el HPR da la entrada
+    plana = Escenarios(sendas={k: Senda(k, fechas, {e: [0.0614] * len(fechas)
+                                                    for e in ESCENARIOS})
+                               for k in ("IPC", "IBR")})
+    planos = {e: v0("ipc", e, plana) for e in ESCENARIOS}
+    assert len({round(r[0].v0, 9) for r in planos.values()}) == 1
+    for r in planos.values():
+        for x in r:
+            assert x.hpr == pytest.approx(x.tasa_entrada, abs=1e-9)
+
+
 @hay_escenarios
 @tiene_datos
 def test_hpr_cupon_y_marcas(valoraciones):
@@ -1245,8 +1299,8 @@ def test_hpr_cupon_y_marcas(valoraciones):
                                        F_T, pagos)[0]
         assert fecha_del_indice(primera, 12 // pagos, F_T, False) <= F_T < primera
 
-    # en modo plano, el que sostiene V₀, las fechas futuras caen a la de valoración;
-    # las pasadas se dejan, por lo mismo de arriba
+    # en modo plano, el que sostiene V₀ en IBR, las fechas futuras caen a la de
+    # valoración; las pasadas se dejan, por lo mismo de arriba
     assert fecha_del_indice(dt.date(2027, 8, 27), 3, F_T, True) == F_T
     assert fecha_del_indice(dt.date(2026, 8, 27), 3, F_T, True) == dt.date(2026, 5, 27)
     assert menos_meses(dt.date(2027, 3, 31), 1) == dt.date(2027, 2, 28)

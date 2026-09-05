@@ -18,9 +18,12 @@ de la ventana. No se promedia ni se interpola entre rangos.
         TF    TIR(T)
         IPC   (1 + margen) × (1 + IPC) − 1
         IBR   (1 + (IBR + margen) / 12)^12 − 1
-  - **V₀**: todos los cupones proyectados con el índice de hoy y descontados con la
-    tasa recompuesta con ese mismo índice. Es igual en los tres escenarios: lo que
-    se paga hoy no depende de la expectativa propia.
+  - **V₀**: los cupones descontados con la tasa recompuesta con el índice de hoy,
+    que es la TIR del nodo. Cómo se proyectan esos cupones depende del tipo, ver
+    `V0_CON_ESCENARIO`: en IBR se aplana la senda al índice de hoy y V₀ sale igual
+    en los tres escenarios; en IPC cada cupón lee el índice tres meses antes de su
+    propio pago, también más allá de la valoración, así que V₀ cambia con el
+    escenario.
   - **V₁** en el día h: los flujos posteriores, proyectados con el escenario y
     descontados desde h con la tasa recompuesta usando el índice proyectado en
     T+h y el margen desplazado por el delta.
@@ -40,6 +43,13 @@ from dataclasses import dataclass
 from .escenarios import Escenarios
 
 HORIZONTES = (90, 180)           # el tercero es el vencimiento
+
+# Tipos cuyo precio de entrada se proyecta con la senda del escenario elegido, en
+# vez de aplanarla al índice de hoy. Es una decisión de negocio, no una propiedad
+# del método: en IPC el cupón de cada período se lee tres meses antes de su pago
+# también más allá de la valoración, así que V₀ —y con él el precio de entrada—
+# cambia con el escenario. En IBR el precio de entrada sigue siendo plano.
+V0_CON_ESCENARIO = frozenset({"ipc"})
 PAGOS_POR_ANIO = {"fs": 4, "ipc": 4, "ibr": 12}
 INDICE_DE = {"ipc": "IPC", "ibr": "IBR"}
 
@@ -190,8 +200,11 @@ def calcular(*, tipo: str, fecha_val: dt.date, vencimiento: dt.date, tir: float,
 
     con_escenario, ex_esc = _flujos(tipo, fechas, vencimiento, fecha_val,
                                     cupon_facial, escenarios, escenario, plano=False)
-    planos, _ = _flujos(tipo, fechas, vencimiento, fecha_val, cupon_facial,
-                        escenarios, escenario, plano=True)
+    if tipo in V0_CON_ESCENARIO:
+        planos = con_escenario
+    else:
+        planos, _ = _flujos(tipo, fechas, vencimiento, fecha_val, cupon_facial,
+                            escenarios, escenario, plano=True)
 
     tasa_ent = tasa_descuento(tipo, tir, margen, indice_hoy)
     v0 = 100 * _valor_presente(planos, fecha_val, tasa_ent)

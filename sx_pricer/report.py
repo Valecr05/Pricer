@@ -24,7 +24,7 @@ import json
 
 from . import config as cfg
 from .config import DETAIL_LAYOUT, MarketParams
-from .hpr import HORIZONTES, INDICE_DE, PAGOS_POR_ANIO
+from .hpr import HORIZONTES, INDICE_DE, PAGOS_POR_ANIO, V0_CON_ESCENARIO
 
 
 def e(x) -> str:
@@ -498,7 +498,11 @@ function rentabilidad(D, opciones){
       return [f, c + (f === venc ? 1 : 0)];
     });
   };
-  var conEscenario = construir(false), planos = construir(true);
+  var conEscenario = construir(false);
+  // en los tipos que proyectan V0 con el escenario no hay una segunda pasada: el
+  // precio de entrada usa los mismos flujos que la salida
+  var planos = (D.hpr.v0ConEscenario || []).indexOf(tipo) >= 0
+               ? conEscenario : construir(true);
 
   var vpres = function(lista, desde, tasa){
     var s = 0;
@@ -1480,7 +1484,8 @@ def render(*, serie, seleccion: tuple[str, str], params: MarketParams,
         "escenarios": escenarios.para_json() if escenarios is not None and
                       escenarios.activo else None,
         "hpr": {"horizontes": list(HORIZONTES),
-                "pagos": dict(PAGOS_POR_ANIO), "indice": dict(INDICE_DE)},
+                "pagos": dict(PAGOS_POR_ANIO), "indice": dict(INDICE_DE),
+                "v0ConEscenario": sorted(V0_CON_ESCENARIO)},
         "generado": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "version": version,
         "tiempos": tiempos,

@@ -336,11 +336,24 @@ la entrada y el proyectado en T+h en la salida.
 El margen es la columna «Margen real» en IPC —despejada del IPC del archivo de
 escenarios— y el del atajo de la bvc en IBR.
 
-**V₀** descuenta los cupones con la tasa recompuesta con el índice de hoy, y es idéntico
-en los tres escenarios: lo que se paga hoy no depende de la expectativa propia. Para
-lograrlo, toda fecha de índice posterior a la valoración se reemplaza por la de
-valoración; las anteriores se dejan como están, porque ahí el índice es un dato publicado
-y no una proyección.
+**V₀** descuenta todos los flujos a la tasa recompuesta con el índice de hoy, que por
+construcción es **la TIR del nodo**: el margen se despejó dividiendo por ese mismo
+índice, así que al multiplicarlo de vuelta el índice se cancela. Una sola tasa plana
+para todos los cupones.
+
+Cómo se proyectan esos cupones depende del bloque:
+
+| Bloque | Proyección de los cupones en V₀ |
+|---|---|
+| **IPC** | con la **senda del escenario elegido**: cada cupón lee el índice tres meses antes de su propio pago, también más allá de la valoración. V₀ cambia con el escenario |
+| **IBR** | aplanada al índice de hoy: toda fecha de índice posterior a la valoración se reemplaza por la de valoración. V₀ es idéntico en los tres escenarios |
+
+En IPC es una decisión de negocio, no una propiedad del método: el precio de entrada
+incorpora la expectativa de inflación, así que comprar en el escenario alcista cuesta más
+hoy. La lista de bloques que se comportan así es `V0_CON_ESCENARIO`, en `hpr.py`.
+
+En los dos casos, las fechas de índice anteriores a la valoración se dejan como están,
+porque ahí el índice es un dato publicado y no una proyección.
 
 **V₁**, en el día h, descuenta los flujos posteriores —proyectados con el escenario— a
 la tasa recompuesta con el índice proyectado en T+h y el margen desplazado por el delta.
