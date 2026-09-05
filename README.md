@@ -311,6 +311,106 @@ Controles: tipo (tasa fija / IPC / IBR), escenario (Alcista · Base · Bajista) 
 libre de delta en puntos básicos. Tres tablas por tipo: **90 días, 180 días y al
 vencimiento**.
 
+### El bloque de IPC, de principio a fin
+
+Esta es la metodología acordada para IPC, con un ejemplo completo. Lo que sigue después,
+en «Cómo se construye», es la mecánica común a los tres tipos.
+
+**Los tres insumos** salen del nodo del bloque IPC · CDT en la fecha T, y de ningún otro
+lado:
+
+| Insumo | Qué es | En el ejemplo |
+|---|---|---|
+| **TIR** | la tasa de valoración promedio del nodo, sin convertir — la columna «Tasa» de la pestaña de curvas | 11,070 % |
+| **Cupón** | el cupón facial promedio del nodo, que en IPC es el **spread sobre inflación**, no una tasa nominal | 3,000 % |
+| **Margen real** | `(1 + TIR) / (1 + IPC de la barra) − 1` — **el mismo número que muestra la columna «Margen real»** de la pestaña de curvas | 4,6448 % |
+
+**El CDT sintético** vence en el borde de su ventana —el último día en que un título
+puede vencer y aún contar en ese rango— y paga **cupón trimestral**. El calendario se
+cuenta hacia atrás desde el vencimiento, así que el día del mes no se arrastra al pasar
+por un mes corto.
+
+**La tasa cupón de cada período** es `[(1 + cupón T) × (1 + IPC)]^(1/4) − 1`, y ese IPC se
+lee **tres meses antes del pago del propio cupón** — para el primero, eso es el día en
+que se pagó el último cupón antes de hoy, que siempre cae en o antes de la valoración y
+por tanto es un dato publicado. Los demás son proyección y salen de la senda del
+escenario elegido. Valorando el 28-jul-2026 un rango que vence el 27-jul-2027:
+
+| Cupón paga | Lee el IPC de | Alcista | Base |
+|---|---|---|---|
+| 27-oct-2026 | 27-jul-2026 | 6,140 % → 2,2537 % | 6,140 % → 2,2537 % |
+| 27-ene-2027 | 27-oct-2026 | 6,292 % → 2,2902 % | 6,140 % → 2,2537 % |
+| 27-abr-2027 | 27-ene-2027 | 6,442 % → 2,3263 % | 6,140 % → 2,2537 % |
+| 27-jul-2027 | 27-abr-2027 | 6,592 % → 2,3623 % | 6,140 % → 2,2537 % |
+
+**V₀, el precio de entrada**, descuenta todos esos flujos a una sola tasa:
+`(1 + IPC de la barra) × (1 + margen real) − 1`. Como el margen se despejó dividiendo por
+ese mismo IPC, **el IPC se cancela y la tasa de entrada es exactamente la TIR del nodo**.
+Escribir otro IPC arriba no mueve el precio: solo reparte distinto entre inflación y
+margen. Los cupones, en cambio, sí se proyectan con la senda, así que **V₀ depende del
+escenario**: comprar esperando más inflación cuesta más hoy.
+
+**La salida**, en el día h (90 días, 180 días, o el vencimiento menos un día):
+
+- Los flujos **anteriores** a la fecha de salida son V₀ hoy y cada cupón cobrado en la
+  fecha en que se paga.
+- Los flujos **posteriores** se traen a la fecha de salida —proyectados con la senda del
+  escenario— a la tasa `(1 + margen real + δ) × (1 + IPC esperado en la fecha de salida) − 1`.
+- Ese IPC esperado se lee **en la propia fecha de salida**, no tres meses antes: la regla
+  de «tres meses antes» rige la tasa cupón, no la de descuento.
+- El **margen no se recalcula**: es el de T y solo lo mueve el delta.
+
+**El HPR** es el XIRR de `−V₀` hoy, los cupones cobrados en sus días y `+V₁` en el día h,
+base ACT/365.
+
+Con el ejemplo de arriba, IPC de la barra en 6,14 % y senda Base plana en ese mismo valor:
+
+| Escenario | V₀ | Tasa de venta 90 d | V₁ 90 d | HPR 90 d | 180 d | Al venc. |
+|---|---|---|---|---|---|---|
+| Alcista | 98,7056 | 11,1764 % | 101,2246 | 10,7609 % | 10,8133 % | 11,0683 % |
+| Base | 98,5060 | 11,0700 % | 101,0894 | **11,0700 %** | **11,0700 %** | **11,0700 %** |
+| Bajista | 98,3060 | 10,9636 % | 100,9536 | 11,3805 % | 11,3283 % | 11,0717 % |
+
+La fila Base devuelve exactamente la tasa de entrada en los tres horizontes, que es el
+invariante de la construcción. Y fíjate en el signo: **el escenario alcista rinde menos**,
+no más. No es un error — al proyectar V₀ con la senda, ya pagaste hoy por esa inflación,
+así que que se cumpla no te deja ganancia extra.
+
+El delta, siempre sobre la tasa de venta:
+
+| δ | HPR 90 d | 180 d | Al venc. |
+|---|---|---|---|
+| −50 pb | 12,6299 % | 11,5913 % | 11,0714 % |
+| 0 | 11,0700 % | 11,0700 % | 11,0700 % |
+| +100 pb | 8,0366 % | 10,0421 % | 11,0672 % |
+
+Como el delta mueve el **margen** y este va dentro del producto, 100 pb de delta se
+traducen en unos 106 pb sobre la tasa de venta. Es deliberado.
+
+#### Conviene que `params.json` y el archivo de escenarios coincidan en T
+
+El margen se despeja con el IPC de la barra, pero la venta se recompone con el IPC que la
+**senda** proyecta en la fecha de salida. Si esos dos valores no coinciden en T, la brecha
+aparece como rentabilidad ya en el primer trimestre:
+
+| IPC de la barra (senda en T = 6,21 %) | HPR 90 d |
+|---|---|
+| 5,50 % | 8,92 % |
+| 6,14 % | 10,86 % |
+| **6,21 %** — igual que la senda | **11,07 %** |
+| 7,00 % | 13,49 % |
+
+No es un defecto del método: dice que el mercado descuenta hoy una inflación distinta a la
+que arranca la senda. Pero si no es eso lo que se quiere leer, los dos archivos tienen que
+estar alineados en la fecha T.
+
+#### Dónde está en el código
+
+`hpr.py` lo implementa y `JS_CALC`, dentro de `report.py`, lo replica para que el navegador
+pueda recalcular al vuelo; las dos versiones se comparan celda por celda en las pruebas.
+`V0_CON_ESCENARIO` declara qué bloques proyectan V₀ con la senda —hoy, solo IPC— y
+`filasHpr` es quien pasa el IPC de la barra como índice de entrada.
+
 ### Cómo se construye
 
 **Calendario** hacia atrás desde el vencimiento, en pasos de tres meses (tasa fija e
@@ -325,8 +425,9 @@ valoración, así que ahí el índice es un dato publicado y no una proyección.
 de IPC es la fracción fija `1/4`; en tasa fija e IBR la conversión a periódica es
 división lineal:
 
-Esto rige solo la **tasa cupón**. La tasa de descuento sigue usando el índice de hoy en
-la entrada y el proyectado en T+h en la salida.
+Esto rige solo la **tasa cupón**. La tasa de descuento usa el índice de hoy en la entrada
+y el proyectado en T+h en la salida. En IPC ese «índice de hoy» es el de la barra; en IBR,
+el que la senda trae en T.
 
 | Tipo | Cupón del período | Tasa de descuento |
 |---|---|---|
@@ -388,7 +489,7 @@ de IBR, escenario Base:
 | 0 | 12,914 % | 13,073 % | 13,154 % |
 | +100 pb | 9,767 % | 12,005 % | 13,152 % |
 
-### Tres invariantes, fijados en las pruebas
+### Cuatro invariantes, fijados en las pruebas
 
 1. Tasa fija al vencimiento con δ = 0 devuelve **exactamente su propia TIR**.
 2. El escenario **no mueve ni un decimal** en tasa fija, en ninguno de los tres
@@ -396,6 +497,9 @@ de IBR, escenario Base:
 3. Con la senda del índice plana y δ = 0, el HPR devuelve **exactamente la tasa de
    entrada** en IPC y en IBR. Es lo que garantiza que entrada y salida usan la misma
    construcción y no aparecen ganancias fantasma.
+4. En IPC, la **tasa de entrada es la TIR del nodo** para cualquier IPC que se escriba en
+   la barra, porque el mismo valor despeja el margen y lo recompone. Cambiar el IPC de
+   arriba no mueve V₀; mueve la venta.
 
 ### Dos advertencias que el reporte muestra
 
@@ -694,6 +798,7 @@ donde el corte no cambió.
 | Nemotécnicos CINAS y TDS | fuera de la tabla de TES (llegan con tasa y duración en cero) |
 | Corte de los bloques | ventanas mensuales de vencimiento, con la ventana de fechas en la primera columna |
 | Rentabilidades esperadas | solo CDT; tres tipos, tres escenarios, delta libre en pb |
+| Valoración del CDT sintético de IPC | vence en el borde de su ventana; cupón trimestral `[(1+cupón T)(1+IPC)]^(1/4)−1` con el IPC de tres meses antes de cada pago; V₀ proyectado con la senda del escenario y descontado a la TIR del nodo; venta a `(1+margen real+δ)(1+IPC esperado en la fecha de salida)−1` |
 | Horizonte | 7 años en tasa fija, 3 en IPC y en IBR |
 | Contenido del nodo | promedio de todos los títulos que vencen en la ventana |
 | Muestra por nodo | se incluye (`n T-1`, `n T`) con nota al pie si algún nodo queda corto |
