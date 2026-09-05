@@ -255,7 +255,8 @@ par se compara se decide al momento y las tablas y gráficas se rehacen al insta
 
 También se editan ahí el **IPC de cada fecha** y la **tasa BanRep**. Al elegir una fecha,
 su IPC se precarga desde `ipc_por_fecha`; cambiarlo recalcula el margen real de los nodos
-indexados, su diferencia entre fechas y las gráficas de esos bloques.
+indexados, su diferencia entre fechas, las gráficas de esos bloques y —desde que el HPR
+toma ese mismo margen— las rentabilidades esperadas de IPC.
 
 Que el recálculo sea exacto depende de una propiedad del margen real: es una función
 **afín** de la tasa de valoración, así que aplicarla al promedio de las tasas de un nodo
@@ -333,8 +334,12 @@ la entrada y el proyectado en T+h en la salida.
 | IPC | `((1+IPC_inicio) × (1+cupón))^(1/4) − 1` | `(1 + margen) × (1 + IPC) − 1` |
 | IBR | `(IBR_inicio + cupón) / 12` | `(1 + (IBR + margen)/12)^12 − 1` |
 
-El margen es la columna «Margen real» en IPC —despejada del IPC del archivo de
-escenarios— y el del atajo de la bvc en IBR.
+El margen es, en IPC, **el mismo número que muestra la columna «Margen real» de la
+pestaña de curvas**: despejado con el IPC que esté puesto en la barra de arriba, no con
+el del archivo de escenarios. Ese mismo IPC recompone la tasa de entrada, así que los dos
+se cancelan y V₀ descuenta a la TIR del nodo escriba lo que escriba el usuario. Lo que sí
+se mueve al cambiar el IPC de la barra es la **tasa de venta**, porque el margen entra en
+ella. En IBR el margen es el del atajo de la bvc.
 
 **V₀** descuenta todos los flujos a la tasa recompuesta con el índice de hoy, que por
 construcción es **la TIR del nodo**: el margen se despejó dividiendo por ese mismo

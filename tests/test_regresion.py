@@ -1266,6 +1266,45 @@ def test_v0_de_ipc_se_proyecta_con_el_escenario():
             assert x.hpr == pytest.approx(x.tasa_entrada, abs=1e-9)
 
 
+def test_el_margen_del_hpr_es_el_de_la_tabla_de_curvas():
+    """El margen de IPC sale de la pestaña de curvas, con el IPC de la barra.
+
+    Ese mismo IPC recompone la tasa de entrada, así que los dos se cancelan y V₀
+    descuenta a la TIR del nodo, escriba lo que escriba el usuario arriba. Lo que sí
+    se mueve con la barra es la tasa de venta, porque el margen entra en ella.
+    """
+    import datetime as dtm
+    from sx_pricer.escenarios import ESCENARIOS, Escenarios, Senda
+    from sx_pricer import hpr as H
+
+    T, venc = dtm.date(2026, 7, 28), dtm.date(2027, 7, 27)
+    fechas = [dtm.date(2026, 1, 1) + dtm.timedelta(days=30 * k) for k in range(30)]
+    # la senda trae 6,21 % en T, distinto de lo que se escriba en la barra
+    esc = Escenarios(sendas={"IPC": Senda("IPC", fechas,
+                             {e: [0.0621] * len(fechas) for e in ESCENARIOS})})
+    tir = 0.1107
+
+    salidas = {}
+    for ipc_barra in (0.0550, 0.0614, 0.0700):
+        margen = (1 + tir) / (1 + ipc_barra) - 1        # el de la tabla de curvas
+        r = H.calcular(tipo="ipc", fecha_val=T, vencimiento=venc, tir=tir,
+                       cupon_facial=0.03, margen=margen, escenarios=esc,
+                       indice_entrada=ipc_barra)
+        # la entrada es la TIR del nodo, venga el IPC de donde venga
+        assert r[0].tasa_entrada == pytest.approx(tir, abs=1e-12), ipc_barra
+        assert r[0].v0 == pytest.approx(r[1].v0) == pytest.approx(r[2].v0)
+        salidas[ipc_barra] = r[0].tasa_salida
+
+    # un IPC de barra más bajo deja un margen más alto, y con él una venta más cara
+    assert salidas[0.0550] > salidas[0.0614] > salidas[0.0700]
+
+    # sin indicar el índice de entrada se cae al de la senda, como antes
+    margen_senda = (1 + tir) / 1.0621 - 1
+    r = H.calcular(tipo="ipc", fecha_val=T, vencimiento=venc, tir=tir,
+                   cupon_facial=0.03, margen=margen_senda, escenarios=esc)
+    assert r[0].tasa_entrada == pytest.approx(tir, abs=1e-12)
+
+
 @hay_escenarios
 @tiene_datos
 def test_hpr_cupon_y_marcas(valoraciones):

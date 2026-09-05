@@ -187,8 +187,15 @@ def _valor_presente(flujos, desde: dt.date, tasa: float) -> float:
 def calcular(*, tipo: str, fecha_val: dt.date, vencimiento: dt.date, tir: float,
              cupon_facial: float, margen: float, escenarios: Escenarios | None,
              escenario: str = "Base", delta_pb: float = 0.0,
-             horizontes=HORIZONTES) -> list[ResultadoHPR]:
-    """HPR del CDT sintético de un rango, a cada horizonte y al vencimiento."""
+             horizontes=HORIZONTES,
+             indice_entrada: float | None = None) -> list[ResultadoHPR]:
+    """HPR del CDT sintético de un rango, a cada horizonte y al vencimiento.
+
+    `indice_entrada` es el índice con el que se recompone la tasa de entrada. Tiene
+    que ser **el mismo** con el que se despejó `margen`: solo así los dos se
+    cancelan y V₀ descuenta a la TIR del nodo. Si se omite se toma el de la senda
+    en la fecha de valoración, que es lo correcto cuando el margen salió de ahí.
+    """
     pagos = PAGOS_POR_ANIO[tipo]
     fechas = calendario_cupones(vencimiento, fecha_val, pagos)
     dias_venc = (vencimiento - fecha_val).days
@@ -196,7 +203,10 @@ def calcular(*, tipo: str, fecha_val: dt.date, vencimiento: dt.date, tir: float,
         return []
 
     senda = None if tipo == "fs" else escenarios.senda(INDICE_DE[tipo])
-    indice_hoy = 0.0 if senda is None else senda.vigente(fecha_val, escenario)[0]
+    if indice_entrada is not None:
+        indice_hoy = indice_entrada
+    else:
+        indice_hoy = 0.0 if senda is None else senda.vigente(fecha_val, escenario)[0]
 
     con_escenario, ex_esc = _flujos(tipo, fechas, vencimiento, fecha_val,
                                     cupon_facial, escenarios, escenario, plano=False)

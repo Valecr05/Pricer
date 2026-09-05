@@ -483,7 +483,12 @@ function rentabilidad(D, opciones){
   var senda = (tipo === 'fs' || !D.escenarios) ? null
               : D.escenarios.sendas[D.hpr.indice[tipo]];
   if(tipo !== 'fs' && !senda) return null;
-  var indiceHoy = senda ? vigente(senda, T, opciones.escenario)[0] : 0;
+  // el indice con el que se recompone la tasa de entrada tiene que ser el mismo con
+  // el que se despejo el margen; si no, los dos dejan de cancelarse y V0 ya no
+  // descuenta a la TIR del nodo
+  var indiceHoy = (opciones.indiceEntrada === undefined || opciones.indiceEntrada === null)
+    ? (senda ? vigente(senda, T, opciones.escenario)[0] : 0)
+    : opciones.indiceEntrada;
 
   var extrap = false;
   var paso = 12 / pagos;
@@ -1176,31 +1181,33 @@ function bloquePorTipo(id){
 
 // El margen sobre el que actua el delta: en IPC se despeja de la propia TIR con el
 // IPC del archivo de escenarios, en IBR es el del atajo que ya trae la tabla.
-function margenDelNodo(tipo, fila, indiceHoy){
+// El margen de un nodo, tal como lo muestra la pestaña de curvas: en IPC es el
+// margen real despejado con el IPC de la barra —el mismo numero de aquella tabla, no
+// uno propio de esta pestaña— y en IBR el del atajo de la bvc.
+function margenDelNodo(tipo, fila){
   if(tipo === 'fs') return 0;
-  if(tipo === 'ipc'){
-    if(fila.brutaT === null) return null;
-    return (1 + fila.brutaT) / (1 + indiceHoy) - 1;
-  }
+  if(tipo === 'ipc') return fila.tasaT;
   return fila.margenT;
 }
 
 function filasHpr(){
   var b = bloquePorTipo(HPR.tipo);
   var filas = SX.nodos(D, rt(), rt1(), HPR.tipo, 'CDT', S.ipcT, S.ipcT1);
-  var senda = (HPR.tipo === 'fs' || !D.escenarios) ? null
-              : D.escenarios.sendas[D.hpr.indice[HPR.tipo]];
-  var indiceHoy = senda ? SX.vigente(senda, S.t, HPR.escenario)[0] : 0;
+  // En IPC la tasa de entrada se recompone con el IPC de la barra, que es el mismo
+  // con el que se despejo el margen real: los dos se cancelan y V0 descuenta a la
+  // TIR del nodo. En los demas tipos manda el indice de la senda.
+  var indiceEntrada = HPR.tipo === 'ipc' ? S.ipcT : null;
   var fuera = [], excluidas = [];
   filas.forEach(function(r){
-    var m = margenDelNodo(HPR.tipo, r, indiceHoy);
+    var m = margenDelNodo(HPR.tipo, r);
     if(r.brutaT === null || r.cuponT === null || m === null){
       excluidas.push(r); return;
     }
     var venc = SX.sumarDias(r.hastaT, -1);       // fin de ventana
     var res = SX.rentabilidad(D, {
       tipo: HPR.tipo, fechaVal: S.t, vencimiento: venc, tir: r.brutaT,
-      cupon: r.cuponT / 100, margen: m, escenario: HPR.escenario, deltaPb: HPR.delta
+      cupon: r.cuponT / 100, margen: m, escenario: HPR.escenario,
+      deltaPb: HPR.delta, indiceEntrada: indiceEntrada
     });
     if(!res){ excluidas.push(r); return; }
     fuera.push({ fila: r, venc: venc, margen: m, res: res });
