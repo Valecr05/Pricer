@@ -404,12 +404,88 @@ No es un defecto del método: dice que el mercado descuenta hoy una inflación d
 que arranca la senda. Pero si no es eso lo que se quiere leer, los dos archivos tienen que
 estar alineados en la fecha T.
 
-#### Dónde está en el código
+### El bloque de IBR, de principio a fin
+
+Misma estructura que el de IPC, con tres diferencias: el cupón es **mensual**, el índice
+se lee **un mes** antes del pago, y **la tasa de descuento no es una sola** sino una por
+flujo.
+
+**Los tres insumos**, del nodo del bloque IBR · CDT en la fecha T:
+
+| Insumo | Qué es | En el ejemplo |
+|---|---|---|
+| **TIR** | la tasa de valoración promedio del nodo, sin convertir | 12,800 % |
+| **Cupón** | el cupón facial promedio del nodo, un spread sobre IBR | 1,300 % |
+| **Margen** | el **margen del atajo de la bvc** que muestra la pestaña de curvas | 1,300 % |
+
+**El CDT sintético** vence el último día de su ventana y paga **cupón mensual**, contado
+hacia atrás desde el vencimiento — la misma fecha con la que se calcula su margen.
+
+**Cada flujo usa dos fechas distintas**, y es lo que más se presta a confusión:
+
+- su **cupón** se fija al **inicio del período**, un mes antes del pago:
+  `(IBR de esa fecha + cupón del rango) / 12`
+- su **descuento** se lee el **día del pago**: `IBR de esa fecha + margen`, que es
+  **nominal mes vencido** y por eso se recompone a efectiva anual antes de aplicarse en
+  base ACT/365.
+
+Valorando el 28-jul-2026 un rango que vence el 27-jul-2027, escenario Alcista:
+
+| Cupón paga | Lee para el cupón | IBR | Cupón del mes | Lee para el descuento | IBR | Tasa efectiva |
+|---|---|---|---|---|---|---|
+| 27-ago-2026 | 27-jul-2026 *(IB1)* | 11,530 % | 1,0692 % | 27-ago-2026 | 11,503 % | 13,5820 % |
+| 27-sep-2026 | 27-ago-2026 | 11,503 % | 1,0669 % | 27-sep-2026 | 11,703 % | 13,8070 % |
+| 27-oct-2026 | 27-sep-2026 | 11,703 % | 1,0836 % | 27-oct-2026 | 11,803 % | 13,9196 % |
+| 27-nov-2026 | 27-oct-2026 | 11,803 % | 1,0919 % | 27-nov-2026 | 11,903 % | 14,0324 % |
+
+La primera fila lee su cupón de **`IB1.xlsx`** y no del archivo de escenarios: esa fecha
+ya pasó, así que es dato publicado. Es también la única lectura que cae de ese lado.
+
+**V₀** descuenta cada flujo con la tasa de su propia fila, en base ACT/365. **La salida**
+usa la misma construcción, con el margen desplazado por el delta.
+
+| Escenario | V₀ | HPR 90 d | 180 d | Al venc. |
+|---|---|---|---|---|
+| Alcista | 99,4370 | 14,871 % | 14,887 % | 14,908 % |
+| Base | 100,0344 | **13,578 %** | **13,578 %** | **13,578 %** |
+| Bajista | 100,6389 | 12,295 % | 12,280 % | 12,261 % |
+
+| δ | HPR 90 d | 180 d | Al venc. |
+|---|---|---|---|
+| −50 pb | 15,196 % | 14,119 % | 13,580 % |
+| 0 | 13,578 % | 13,578 % | 13,578 % |
+| +100 pb | 10,413 % | 12,506 % | 13,575 % |
+
+#### Por qué IBR e IPC se mueven en sentidos opuestos
+
+Es la consecuencia del desfase de un mes, y conviene tenerla clara antes de leer las dos
+tablas seguidas:
+
+| | Qué mueve la senda | Efecto de un escenario alcista |
+|---|---|---|
+| **IPC** | solo los **cupones**; la tasa de descuento es una sola y fija, la TIR del nodo | encarece el papel hoy → **rinde menos** |
+| **IBR** | los cupones **y** la tasa de descuento, que además se lee un mes más tarde | abarata el papel hoy → **rinde más** |
+
+En una senda que sube, el descuento de IBR va siempre por encima de su cupón porque lo
+lee un mes después: descuenta más de lo que paga. No es un error de signo — es lo que
+resulta de leer el descuento en la fecha de pago y el cupón al inicio del período.
+
+#### Lo que queda por confirmar en este bloque
+
+**La tasa de entrada de IBR no reproduce la TIR del nodo.** En IPC sí: el margen se
+despeja y se recompone con el mismo IPC, y los dos se cancelan. En IBR el margen viene
+del atajo —que descuenta contra toda la curva forward— y la entrada lo recompone con un
+solo valor de IBR, así que las dos cuentas no son inversas. Con una curva forward plana
+la brecha medida es de +10 pb a seis meses y prácticamente cero en los plazos largos; con
+la curva real llega a **48 pb**. Está pendiente de decisión: ver la sección de pendientes.
+
+### Dónde está en el código
 
 `hpr.py` lo implementa y `JS_CALC`, dentro de `report.py`, lo replica para que el navegador
 pueda recalcular al vuelo; las dos versiones se comparan celda por celda en las pruebas.
 `filasHpr` es quien arma la llamada: pasa el IPC de la barra como índice de entrada en
-IPC, y la senda publicada del día en IBR.
+IPC, y la senda publicada del día en IBR. `DESCUENTO_POR_FLUJO` declara qué bloques
+descuentan flujo a flujo.
 
 ### Cómo se construye
 
@@ -645,8 +721,6 @@ otros ocho plazos.
 
 ### Dos pestañas
 
-### Dos pestañas
-
 El título va centrado y las dos pestañas debajo. Las fechas comparadas no se repiten
 en la cabecera: están en las listas de la barra de parámetros.
 
@@ -826,6 +900,7 @@ donde el corte no cambió.
 | Corte de los bloques | ventanas mensuales de vencimiento, con la ventana de fechas en la primera columna |
 | Rentabilidades esperadas | solo CDT; tres tipos, tres escenarios, delta libre en pb |
 | Valoración del CDT sintético de IPC | vence en el borde de su ventana; cupón trimestral `[(1+cupón T)(1+IPC)]^(1/4)−1` con el IPC de tres meses antes de cada pago; V₀ proyectado con la senda del escenario y descontado a la TIR del nodo; venta a `(1+margen real+δ)(1+IPC esperado en la fecha de salida)−1` |
+| Valoración del CDT sintético de IBR | vence el último día de su ventana; cupón mensual `(IBR + cupón T)/12` con el IBR de un mes antes de cada pago, tomado de `IB1.xlsx` cuando esa fecha ya pasó; cada flujo se descuenta con el IBR de **su propia fecha de pago** más el margen del atajo, nominal mes vencido recompuesto a efectiva anual, en base ACT/365; la venta igual, con el margen desplazado por el delta |
 | Horizonte | 7 años en tasa fija, 3 en IPC y en IBR |
 | Contenido del nodo | promedio de todos los títulos que vencen en la ventana |
 | Muestra por nodo | se incluye (`n T-1`, `n T`) con nota al pie si algún nodo queda corto |
@@ -928,6 +1003,14 @@ dividía por cero.
    contra 1,71 en precio). La duración es poco sensible: 4,162 contra 4,143 años.
 6. **`Call Implicitas`** estaba comentado en el VBA. Si era un paso faltante, hay que
    especificarlo.
+7. **La tasa de entrada de IBR no reproduce la TIR de su propio nodo.** El margen del
+   atajo se obtiene descontando contra toda la curva forward, y la entrada lo recompone
+   con un solo valor de IBR: las dos cuentas no son inversas. La brecha llega a 48 pb en
+   los plazos largos con la curva real. Se dejó pendiente a propósito, para revisarla
+   cuando estén confirmadas las rentabilidades esperadas de IPC e IBR.
+8. **Las rentabilidades esperadas de IPC e IBR están en confirmación.** Las convenciones
+   de las dos secciones anteriores son las acordadas hasta hoy y pueden ajustarse; el
+   README es el sitio donde queda constancia de cuál rige en cada momento.
 
 ## Estructura
 
