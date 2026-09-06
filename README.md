@@ -425,15 +425,27 @@ valoración, así que ahí el índice es un dato publicado y no una proyección.
 de IPC es la fracción fija `1/4`; en tasa fija e IBR la conversión a periódica es
 división lineal:
 
-Esto rige solo la **tasa cupón**. La tasa de descuento usa el índice de hoy en la entrada
-y el proyectado en T+h en la salida. En IPC ese «índice de hoy» es el de la barra; en IBR,
-el que la senda trae en T.
+Esto rige solo la **tasa cupón**. La de descuento es otra cosa, y no se lee igual en
+todos los bloques:
 
-| Tipo | Cupón del período | Tasa de descuento |
-|---|---|---|
-| Tasa fija | `cupón / 4` | `TIR(T)` |
-| IPC | `((1+IPC_inicio) × (1+cupón))^(1/4) − 1` | `(1 + margen) × (1 + IPC) − 1` |
-| IBR | `(IBR_inicio + cupón) / 12` | `(1 + (IBR + margen)/12)^12 − 1` |
+| Tipo | Cupón del período | Tasa de descuento | Índice de esa tasa |
+|---|---|---|---|
+| Tasa fija | `cupón / 4` | `TIR(T)` | — |
+| IPC | `((1+IPC_inicio) × (1+cupón))^(1/4) − 1` | `(1 + margen) × (1 + IPC) − 1` | **una sola**: el IPC de la barra en la entrada, el proyectado en T+h en la salida |
+| IBR | `(IBR_inicio + cupón) / 12` | `(1 + (IBR + margen)/12)^12 − 1` | **una por flujo**: el IBR que la senda proyecta en la **fecha de pago de ese flujo** |
+
+En IBR, entonces, un mismo flujo usa **dos fechas distintas**: su cupón se fija al inicio
+del período —un mes antes del pago— y su descuento se lee el día del pago. La suma
+`IBR + margen` es **nominal mes vencido**, igual que la del cupón, así que se recompone a
+efectiva anual antes de aplicarla en base ACT/365. La lista de bloques que descuentan flujo
+a flujo es `DESCUENTO_POR_FLUJO`, en `hpr.py`.
+
+Eso tiene una consecuencia que conviene tener presente: **en una senda que sube, el
+descuento sube más que el cupón**, porque lo lee un mes más tarde. Así que en IBR el
+escenario alcista **abarata** el papel hoy y por tanto le sube la rentabilidad, mientras
+que en IPC —donde la tasa de descuento es una sola y fija— lo **encarece** y se la baja.
+Los dos bloques se mueven en sentidos opuestos ante el mismo botón de escenario, y es por
+construcción, no por un error.
 
 El margen es, en IPC, **el mismo número que muestra la columna «Margen real» de la
 pestaña de curvas**: despejado con el IPC que esté puesto en la barra de arriba, no con

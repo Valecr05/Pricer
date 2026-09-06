@@ -18,6 +18,10 @@ de la ventana. No se promedia ni se interpola entre rangos.
         TF    TIR(T)
         IPC   (1 + margen) × (1 + IPC) − 1
         IBR   (1 + (IBR + margen) / 12)^12 − 1
+    En IBR el índice de esta tasa se lee en la **fecha de pago del propio flujo** —no
+    al inicio de su período, que es la regla de la tasa cupón— así que cada flujo se
+    descuenta con la suya. Ver `DESCUENTO_POR_FLUJO`. La suma IBR + margen es nominal
+    mes vencido, y por eso se recompone antes de aplicarla en base ACT/365.
   - **V₀**: los cupones descontados con la tasa recompuesta con el índice de hoy.
     Los cupones se proyectan con la **senda del escenario elegido** —cada uno lee el
     índice al inicio de su período, también más allá de la valoración—, así que V₀
@@ -179,8 +183,34 @@ def _flujos(tipo: str, fechas: list[dt.date], vencimiento: dt.date,
     return fuera, extrapolado
 
 
-def _valor_presente(flujos, desde: dt.date, tasa: float) -> float:
-    return sum(fl * (1 + tasa) ** (-((f - desde).days) / 365.0) for f, fl in flujos)
+# Tipos en los que cada flujo se descuenta con el índice de su **propia fecha** y no
+# con uno solo para todo el título. En IBR es una decisión de negocio: el flujo que
+# paga el 27 de octubre se trae a hoy con el IBR que la senda proyecta para el 27 de
+# octubre, más el margen. En IPC y en tasa fija la tasa de descuento es única.
+DESCUENTO_POR_FLUJO = frozenset({"ibr"})
+
+
+def _tasas(tipo: str, fechas: list[dt.date], *, tir: float, margen: float,
+           senda, escenario: str, indice_unico: float) -> tuple[dict[dt.date, float], bool]:
+    """Tasa efectiva anual con la que se descuenta cada flujo, y si hubo extrapolación.
+
+    En los tipos de `DESCUENTO_POR_FLUJO` cada flujo lee el índice en su propia fecha
+    de pago —no al inicio de su período, que es la regla de la tasa cupón— y con él se
+    recompone su tasa. En los demás, todos comparten la recompuesta con `indice_unico`.
+    """
+    if tipo not in DESCUENTO_POR_FLUJO or senda is None:
+        return {f: tasa_descuento(tipo, tir, margen, indice_unico) for f in fechas}, False
+    fuera, extrapolado = {}, False
+    for f in fechas:
+        indice, ex = senda.vigente(f, escenario)
+        extrapolado = extrapolado or ex
+        fuera[f] = tasa_descuento(tipo, tir, margen, indice)
+    return fuera, extrapolado
+
+
+def _valor_presente(flujos, desde: dt.date, tasas: dict[dt.date, float]) -> float:
+    """Base ACT/365. `tasas` trae la tasa efectiva anual de cada fecha de flujo."""
+    return sum(fl * (1 + tasas[f]) ** (-((f - desde).days) / 365.0) for f, fl in flujos)
 
 
 def calcular(*, tipo: str, fecha_val: dt.date, vencimiento: dt.date, tir: float,
@@ -213,8 +243,10 @@ def calcular(*, tipo: str, fecha_val: dt.date, vencimiento: dt.date, tir: float,
     con_escenario, ex_esc = _flujos(tipo, fechas, vencimiento, fecha_val,
                                     cupon_facial, escenarios, escenario, historico)
 
+    tasas_ent, ex_ent = _tasas(tipo, fechas, tir=tir, margen=margen, senda=senda,
+                               escenario=escenario, indice_unico=indice_hoy)
     tasa_ent = tasa_descuento(tipo, tir, margen, indice_hoy)
-    v0 = 100 * _valor_presente(con_escenario, fecha_val, tasa_ent)
+    v0 = 100 * _valor_presente(con_escenario, fecha_val, tasas_ent)
 
     delta = delta_pb / 10000.0
     fuera = []
@@ -229,7 +261,11 @@ def calcular(*, tipo: str, fecha_val: dt.date, vencimiento: dt.date, tir: float,
 
         cupones = [(f, fl) for f, fl in con_escenario if fecha_val < f <= salida]
         resto = [(f, fl) for f, fl in con_escenario if f > salida]
-        v1 = 100 * _valor_presente(resto, salida, tasa_sal)
+        # la venta usa la misma construcción que la entrada, con el margen desplazado
+        tasas_sal, ex_ts = _tasas(tipo, [f for f, _ in resto], tir=tir + delta,
+                                  margen=margen + delta, senda=senda,
+                                  escenario=escenario, indice_unico=indice_salida)
+        v1 = 100 * _valor_presente(resto, salida, tasas_sal)
 
         flujos = ([(0.0, -v0)]
                   + [(float((f - fecha_val).days), 100 * fl) for f, fl in cupones]
@@ -238,5 +274,5 @@ def calcular(*, tipo: str, fecha_val: dt.date, vencimiento: dt.date, tir: float,
             horizonte=pedido, dias=h, hpr=xirr(flujos), v0=v0, v1=v1,
             tasa_entrada=tasa_ent, tasa_salida=tasa_sal, cupones=len(cupones),
             al_vencimiento=(not es_venc) and h < pedido,
-            extrapolado=ex_esc or ex_sal))
+            extrapolado=ex_esc or ex_sal or ex_ent or ex_ts))
     return fuera

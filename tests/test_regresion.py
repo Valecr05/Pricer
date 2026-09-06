@@ -1277,10 +1277,18 @@ def test_v0_de_los_indexados_se_proyecta_con_el_escenario():
                               margen=(1 + 0.1107) / 1.0614 - 1, **kw)
         return H.calcular(tir=0.1280, cupon_facial=0.0130, margen=0.0130, **kw)
 
-    for tipo in ("ipc", "ibr"):
+    # el sentido no es el mismo en los dos bloques, y no por casualidad: en IPC la
+    # tasa de descuento es una sola y fija, así que una senda que sube solo levanta
+    # los cupones y encarece el papel; en IBR la tasa de descuento sigue la senda y
+    # se lee en la fecha de pago —un mes después que el cupón—, así que sube más de
+    # lo que suben los cupones y lo abarata
+    for tipo, sube in (("ipc", True), ("ibr", False)):
         v0 = {e: calcular(tipo, e)[0].v0 for e in ESCENARIOS}
-        assert v0["Alcista"] > v0["Base"] > v0["Bajista"], tipo
         assert len({round(v, 9) for v in v0.values()}) == 3, tipo
+        if sube:
+            assert v0["Alcista"] > v0["Base"] > v0["Bajista"], tipo
+        else:
+            assert v0["Alcista"] < v0["Base"] < v0["Bajista"], tipo
 
     # con la senda plana los tres vuelven a coincidir, y el HPR da la tasa de entrada
     plana = Escenarios(sendas={k: Senda(k, fechas, {e: [b] * len(fechas)
@@ -1292,6 +1300,50 @@ def test_v0_de_los_indexados_se_proyecta_con_el_escenario():
         for r in rs.values():
             for x in r:
                 assert x.hpr == pytest.approx(x.tasa_entrada, abs=1e-9), tipo
+
+
+def test_cada_flujo_de_ibr_se_descuenta_con_el_ibr_de_su_fecha():
+    """En IBR la tasa de descuento se lee en la fecha de pago del propio flujo.
+
+    No al inicio de su período —esa es la regla de la tasa cupón—, y no una sola para
+    todo el título. `IBR + margen` es nominal mes vencido, así que se recompone antes
+    de aplicarla en base ACT/365.
+    """
+    import datetime as dtm
+    from sx_pricer.escenarios import Escenarios, Senda
+    from sx_pricer import hpr as H
+
+    T = dtm.date(2026, 7, 28)
+    venc = dtm.date(2026, 9, 27)          # dos cupones mensuales
+    fechas = [dtm.date(2026, 4, 30) + dtm.timedelta(days=30 * k) for k in range(24)]
+    # senda que sube 10 pb al mes desde la valoración
+    valores = [0.1150 if f <= T else 0.1150 + 0.0010 * ((f - T).days / 30) for f in fechas]
+    esc = Escenarios(sendas={"IBR": Senda("IBR", fechas, {"Base": valores})})
+    sd = esc.senda("IBR")
+    cupon, margen = 0.0130, 0.0130
+
+    flujos = H.calendario_cupones(venc, T, 12)
+    assert flujos == [dtm.date(2026, 8, 27), dtm.date(2026, 9, 27)]
+
+    esperado = 0.0
+    for f in flujos:
+        ibr_cupon = sd.vigente(H.fecha_del_indice(f, 1), "Base")[0]   # inicio del período
+        ibr_desc = sd.vigente(f, "Base")[0]                           # fecha del pago
+        assert ibr_desc >= ibr_cupon                                  # la senda sube
+        flujo = (ibr_cupon + cupon) / 12 + (1.0 if f == venc else 0.0)
+        tasa = (1 + (ibr_desc + margen) / 12) ** 12 - 1               # nominal -> efectiva
+        esperado += flujo * (1 + tasa) ** (-((f - T).days) / 365)
+
+    r = H.calcular(tipo="ibr", fecha_val=T, vencimiento=venc, tir=0.1280,
+                   cupon_facial=cupon, margen=margen, escenarios=esc, escenario="Base")
+    assert r[0].v0 == pytest.approx(100 * esperado, abs=1e-12)
+
+    # y con una sola tasa para todos los flujos daría otra cosa
+    unica = (1 + (sd.vigente(T, "Base")[0] + margen) / 12) ** 12 - 1
+    plano = sum(((sd.vigente(H.fecha_del_indice(f, 1), "Base")[0] + cupon) / 12
+                 + (1.0 if f == venc else 0.0)) * (1 + unica) ** (-((f - T).days) / 365)
+                for f in flujos)
+    assert r[0].v0 != pytest.approx(100 * plano)
 
 
 def test_lo_pasado_sale_de_la_senda_publicada():

@@ -24,7 +24,7 @@ import json
 
 from . import config as cfg
 from .config import DETAIL_LAYOUT, MarketParams
-from .hpr import HORIZONTES, INDICE_DE, PAGOS_POR_ANIO
+from .hpr import DESCUENTO_POR_FLUJO, HORIZONTES, INDICE_DE, PAGOS_POR_ANIO
 
 
 def e(x) -> str:
@@ -509,16 +509,34 @@ function rentabilidad(D, opciones){
     return [f, c + (f === venc ? 1 : 0)];
   });
 
-  var vpres = function(lista, desde, tasa){
+  // Tasa de descuento de cada flujo. En los tipos de descuentoPorFlujo cada uno lee
+  // el indice en su PROPIA fecha de pago —no al inicio de su periodo, que es la regla
+  // de la tasa cupon— y con el se recompone su tasa. En los demas, una sola para todo.
+  var porFlujo = (D.hpr.descuentoPorFlujo || []).indexOf(tipo) >= 0 && senda;
+  var tasas = function(fechasFlujo, tirT, margenT, indiceUnico){
+    var out = {};
+    if(!porFlujo){
+      var unica = tasaDescuento(tipo, tirT, margenT, indiceUnico);
+      fechasFlujo.forEach(function(f){ out[f] = unica; });
+      return out;
+    }
+    fechasFlujo.forEach(function(f){
+      var v = vigente(senda, f, opciones.escenario);
+      extrap = extrap || v[1];
+      out[f] = tasaDescuento(tipo, tirT, margenT, v[0]);
+    });
+    return out;
+  };
+  var vpres = function(lista, desde, mapa){
     var s = 0;
     for(var i = 0; i < lista.length; i++){
-      s += lista[i][1] * Math.pow(1 + tasa, -diasEntre(desde, lista[i][0]) / 365);
+      s += lista[i][1] * Math.pow(1 + mapa[lista[i][0]], -diasEntre(desde, lista[i][0]) / 365);
     }
     return s;
   };
 
   var tasaEnt = tasaDescuento(tipo, opciones.tir, opciones.margen, indiceHoy);
-  var V0 = 100 * vpres(conEscenario, T, tasaEnt);
+  var V0 = 100 * vpres(conEscenario, T, tasas(fechas, opciones.tir, opciones.margen, indiceHoy));
   var delta = opciones.deltaPb / 10000;
 
   // los horizontes fijos, y al final el vencimiento. En esa ultima fila se usa
@@ -535,7 +553,10 @@ function rentabilidad(D, opciones){
 
     var cupones = conEscenario.filter(function(x){ return x[0] > T && x[0] <= salida; });
     var resto = conEscenario.filter(function(x){ return x[0] > salida; });
-    var V1 = 100 * vpres(resto, salida, tasaSal);
+    // la venta usa la misma construccion que la entrada, con el margen desplazado
+    var V1 = 100 * vpres(resto, salida, tasas(resto.map(function(x){ return x[0]; }),
+                                              opciones.tir + delta, opciones.margen + delta,
+                                              vs[0]));
 
     var cf = [[0, -V0]];
     cupones.forEach(function(x){ cf.push([diasEntre(T, x[0]), 100 * x[1]]); });
@@ -1493,7 +1514,8 @@ def render(*, serie, seleccion: tuple[str, str], params: MarketParams,
         "escenarios": escenarios.para_json() if escenarios is not None and
                       escenarios.activo else None,
         "hpr": {"horizontes": list(HORIZONTES),
-                "pagos": dict(PAGOS_POR_ANIO), "indice": dict(INDICE_DE)},
+                "pagos": dict(PAGOS_POR_ANIO), "indice": dict(INDICE_DE),
+                "descuentoPorFlujo": sorted(DESCUENTO_POR_FLUJO)},
         "generado": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "version": version,
         "tiempos": tiempos,
