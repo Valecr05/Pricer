@@ -540,10 +540,16 @@ El bloque de IBR trae, junto a la TIR, el **margen nominal sobre IBR** calculado
 método «atajo» de la Calculadora IBR de la bvc. La gráfica del bloque tiene un botón
 para ver una u otra serie.
 
-Como el nodo es un agregado y no un título, se le supone un cronograma: **vence al
-final de su ventana**, paga cupón mensual hasta esa fecha y está «Previa». La fecha es
-solo un supuesto; la TIR es la del propio nodo. No usa el cupón facial: el atajo no lo
+Como el nodo es un agregado y no un título, se le supone un cronograma: **vence el
+último día de su ventana**, paga cupón mensual hasta esa fecha y está «Previa». La fecha
+es solo un supuesto; la TIR es la del propio nodo. No usa el cupón facial: el atajo no lo
 necesita.
+
+Que sea el **último día** y no el anclaje importa por dos razones. La ventana es
+semiabierta —`[desde, hasta)`—, así que el último día en que un título puede vencer y aún
+contar en el nodo es `hasta − 1`: un rango que va del 28 de agosto al 27 de septiembre
+vence el 27 de septiembre. Y es la misma fecha que usa la pestaña de rentabilidades
+esperadas, de modo que **el margen y el HPR de un rango hablan del mismo instrumento**.
 
 Insumos, los dos por fecha:
 

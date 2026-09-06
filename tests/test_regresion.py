@@ -410,6 +410,27 @@ def test_el_indice_se_lee_un_mes_antes_del_pago():
     assert fecha_del_indice(dt.date(2026, 5, 31)) == dt.date(2026, 4, 30)
 
 
+def test_el_nodo_vence_el_ultimo_dia_de_su_ventana():
+    """El CDT sintético del margen vence el último día del rango, no en el anclaje.
+
+    La ventana es semiabierta, así que un rango que va del 28 de agosto al 27 de
+    septiembre vence el 27 de septiembre. Es la misma fecha que usa la pestaña de
+    rentabilidades esperadas, así que el margen y el HPR de un rango hablan del
+    mismo instrumento.
+    """
+    from sx_pricer.store import vencimiento_del_nodo
+
+    D = dt.date(2026, 7, 28)
+    anclas = [a.date() for a in anclas_mensuales(D, 4)]
+    assert anclas[1] == dt.date(2026, 8, 28) and anclas[2] == dt.date(2026, 9, 28)
+
+    assert vencimiento_del_nodo(D, (anclas[1] - D).days) == dt.date(2026, 8, 27)
+    assert vencimiento_del_nodo(D, (anclas[2] - D).days) == dt.date(2026, 9, 27)
+    for i in range(3):
+        assert (vencimiento_del_nodo(D, (anclas[i + 1] - D).days)
+                == anclas[i + 1] - dt.timedelta(days=1))
+
+
 def test_el_primer_cupon_lee_la_senda_y_los_demas_la_curva():
     """Hoy 28-sep-2026, vencimiento 30-oct-2026, cupón mensual.
 
@@ -512,7 +533,21 @@ def test_el_resumen_guarda_el_margen_y_el_cache_lo_vigila(tmp_path, curvas_lista
     assert len(margenes) == next(b for b in BLOCKS if b.id == "ibr").meses
     # hay margen en toda ventana con títulos; sin títulos no hay TIR que convertir
     assert all((m is None) == (c == 0) for m, c in zip(margenes, conteos))
-    assert margenes[0] == pytest.approx(0.0033, abs=1e-4)
+
+    # el vencimiento supuesto es el último día de la ventana, y el margen guardado
+    # reproduce el que sale de calcularlo aparte con esa misma fecha
+    from sx_pricer.ibr import margen_atajo
+    from sx_pricer.store import vencimiento_del_nodo
+    curva, historico = fuente.para_fecha(F_T)
+    brutas = r["nodos"]["ibr|CDT"]["bruta"]
+    anclas = anclas_mensuales(F_T, next(b for b in BLOCKS if b.id == "ibr").meses)
+    for i, (m, bruta) in enumerate(zip(margenes, brutas)):
+        if bruta is None:
+            continue
+        venc = vencimiento_del_nodo(F_T, (anclas[i + 1].date() - F_T).days)
+        assert venc == anclas[i + 1].date() - dt.timedelta(days=1), i
+        assert m == margen_atajo(fecha_val=F_T, vencimiento=venc, tir=bruta,
+                                 historico=historico, curva=curva), i
     # los bloques sin margen atajo no llevan la columna
     assert "margen" not in r["nodos"]["fs|CDT"]
 

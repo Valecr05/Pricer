@@ -38,12 +38,27 @@ from .loader import SXFormatError, read_sx
 from .transform import build_valuation
 
 # Subir esta versión invalida todos los resúmenes en caché.
-SUMMARY_VERSION = 8
+SUMMARY_VERSION = 9
 
 # Campos del catálogo de instrumentos: no cambian entre fechas, así que se guardan
 # una sola vez por ISIN en lugar de repetirse en cada resumen.
 CATALOGO_CAMPOS = ("nemotecnico", "grupo", "moneda", "periodicidad",
                    "emision", "vencimiento", "cupon")
+
+
+def vencimiento_del_nodo(fecha, dia_fin: int):
+    """Vencimiento supuesto del CDT sintético de un nodo.
+
+    Es el **último día de su ventana**. La ventana es semiabierta —`[desde, hasta)`,
+    ver `curves.nodos_por_ventana`—, así que el último día en que un título puede
+    vencer y aún contar en el nodo es `hasta − 1`, y `dia_fin` es el desplazamiento
+    hasta `hasta`. Un rango que va del 28 de agosto al 27 de septiembre vence el 27
+    de septiembre.
+
+    Es la misma definición que usa la pestaña de rentabilidades esperadas, así que
+    el margen y el HPR de un rango hablan del mismo instrumento.
+    """
+    return pd.Timestamp(fecha).date() + dt.timedelta(days=int(dia_fin) - 1)
 
 
 def _n(x, dec: int | None = None):
@@ -93,11 +108,11 @@ def resumir(path: str | Path, *, params: MarketParams,
     motivo_ibr = (fuente_ibr.motivo_faltante(fecha) if fuente_ibr is not None
                   else "no se indicó carpeta de curvas")
 
-    def margen_del_nodo(dias, tir):
-        if insumos_ibr is None or dias is None or tir is None:
+    def margen_del_nodo(vencimiento, tir):
+        if insumos_ibr is None or vencimiento is None or tir is None:
             return None
         curva, historico = insumos_ibr
-        return margen_atajo(fecha_val=fecha, vencimiento=fecha + dt.timedelta(days=dias),
+        return margen_atajo(fecha_val=fecha, vencimiento=vencimiento,
                             tir=tir, historico=historico, curva=curva)
 
     # Rejilla mensual anclada en la propia fecha de valoración. Se guarda la del
@@ -120,10 +135,10 @@ def resumir(path: str | Path, *, params: MarketParams,
                 "n": [int(x) for x in n["n"]],
             }
             if spec.margen_atajo:
-                # El vencimiento supuesto es el final de la ventana, la fecha más
-                # lejana del rango. La TIR es la del propio nodo.
+                # El vencimiento supuesto es el último día de la ventana. La TIR es
+                # la del propio nodo.
                 bloque["margen"] = [
-                    margen_del_nodo(int(fin), tir)
+                    margen_del_nodo(vencimiento_del_nodo(fecha, fin), tir)
                     for fin, tir in zip(n["dia_fin"], bruta)
                 ]
             nodos[f"{spec.id}|{familia}"] = bloque
