@@ -1247,58 +1247,85 @@ def test_hpr_controles_de_consistencia(valoraciones):
                 assert x.hpr == pytest.approx(x.tasa_entrada, abs=1e-9), (tipo, i)
 
 
-def test_v0_de_ipc_se_proyecta_con_el_escenario():
-    """En IPC el precio de entrada depende del escenario; en IBR no.
+def test_v0_de_los_indexados_se_proyecta_con_el_escenario():
+    """El precio de entrada de los dos bloques indexados depende del escenario.
 
-    El cupón de cada período se lee tres meses antes de su pago, también más allá de
-    la valoración, así que la senda entra en V₀. En IBR se sigue aplanando al índice
-    de hoy, y por eso su precio de entrada es el mismo en los tres escenarios.
+    El cupón de cada período se lee al inicio del período, también más allá de la
+    valoración, así que la senda entra en V₀: comprar esperando más inflación —o más
+    IBR— cuesta más hoy. Ya no hay modo plano.
     """
     import datetime as dtm
     from sx_pricer.escenarios import ESCENARIOS, Escenarios, Senda
     from sx_pricer import hpr as H
 
     T, venc = dtm.date(2026, 7, 28), dtm.date(2027, 7, 27)
-    fechas = [dtm.date(2026, 1, 1) + dtm.timedelta(days=30 * k) for k in range(30)]
+    fechas = [dtm.date(2026, 4, 30) + dtm.timedelta(days=30 * k) for k in range(24)]
 
-    def senda(paso):        # las tres coinciden hasta T y divergen después
-        return [0.0614 if f <= T else 0.0614 + paso * ((f - T).days / 30) for f in fechas]
+    def senda(base, paso):      # las tres coinciden hasta T y divergen después
+        return [base if f <= T else base + paso * ((f - T).days / 30) for f in fechas]
 
-    pasos = {"Alcista": 0.0005, "Base": 0.0, "Bajista": -0.0005}
-    esc = Escenarios(sendas={k: Senda(k, fechas, {e: senda(p) for e, p in pasos.items()})
-                             for k in ("IPC", "IBR")})
-    tir, facial = 0.1107, 0.03
-    margen = (1 + tir) / 1.0614 - 1
+    pasos = {"Alcista": 0.0010, "Base": 0.0, "Bajista": -0.0010}
+    esc = Escenarios(sendas={
+        "IPC": Senda("IPC", fechas, {e: senda(0.0614, p) for e, p in pasos.items()}),
+        "IBR": Senda("IBR", fechas, {e: senda(0.1150, p) for e, p in pasos.items()})})
 
-    def v0(tipo, escenario, escenarios=esc):
+    def calcular(tipo, escenario, escenarios=esc, **extra):
         kw = dict(tipo=tipo, fecha_val=T, vencimiento=venc, escenarios=escenarios,
-                  escenario=escenario)
+                  escenario=escenario, **extra)
         if tipo == "ipc":
-            return H.calcular(tir=tir, cupon_facial=facial, margen=margen, **kw)
-        return H.calcular(tir=0.128, cupon_facial=0.013, margen=0.013, **kw)
+            return H.calcular(tir=0.1107, cupon_facial=0.03,
+                              margen=(1 + 0.1107) / 1.0614 - 1, **kw)
+        return H.calcular(tir=0.1280, cupon_facial=0.0130, margen=0.0130, **kw)
 
-    assert "ipc" in H.V0_CON_ESCENARIO and "ibr" not in H.V0_CON_ESCENARIO
+    for tipo in ("ipc", "ibr"):
+        v0 = {e: calcular(tipo, e)[0].v0 for e in ESCENARIOS}
+        assert v0["Alcista"] > v0["Base"] > v0["Bajista"], tipo
+        assert len({round(v, 9) for v in v0.values()}) == 3, tipo
 
-    ipc = {e: v0("ipc", e)[0].v0 for e in ESCENARIOS}
-    assert ipc["Alcista"] > ipc["Base"] > ipc["Bajista"]
-    assert len({round(v, 9) for v in ipc.values()}) == 3
-
-    ibr = {e: v0("ibr", e)[0].v0 for e in ESCENARIOS}
-    assert len({round(v, 9) for v in ibr.values()}) == 1
-
-    # la tasa de entrada sigue siendo la TIR del nodo, venga de donde venga la senda
-    for e in ESCENARIOS:
-        assert v0("ipc", e)[0].tasa_entrada == pytest.approx(tir, abs=1e-12)
-
-    # y con la senda plana los tres vuelven a coincidir, y el HPR da la entrada
-    plana = Escenarios(sendas={k: Senda(k, fechas, {e: [0.0614] * len(fechas)
+    # con la senda plana los tres vuelven a coincidir, y el HPR da la tasa de entrada
+    plana = Escenarios(sendas={k: Senda(k, fechas, {e: [b] * len(fechas)
                                                     for e in ESCENARIOS})
-                               for k in ("IPC", "IBR")})
-    planos = {e: v0("ipc", e, plana) for e in ESCENARIOS}
-    assert len({round(r[0].v0, 9) for r in planos.values()}) == 1
-    for r in planos.values():
-        for x in r:
-            assert x.hpr == pytest.approx(x.tasa_entrada, abs=1e-9)
+                               for k, b in (("IPC", 0.0614), ("IBR", 0.1150))})
+    for tipo in ("ipc", "ibr"):
+        rs = {e: calcular(tipo, e, plana) for e in ESCENARIOS}
+        assert len({round(r[0].v0, 9) for r in rs.values()}) == 1, tipo
+        for r in rs.values():
+            for x in r:
+                assert x.hpr == pytest.approx(x.tasa_entrada, abs=1e-9), tipo
+
+
+def test_lo_pasado_sale_de_la_senda_publicada():
+    """Las lecturas anteriores a la valoración salen de IB1.xlsx, no de escenarios.
+
+    Es la misma fuente contra la que se calcula el margen del atajo. Solo el primer
+    cupón cae de ese lado, así que es él quien cambia; si al histórico le falta ese
+    día, se cae a la senda de proyección en vez de dejar el rango sin cifra.
+    """
+    import datetime as dtm
+    from sx_pricer.escenarios import Escenarios, Senda
+    from sx_pricer import hpr as H
+
+    T, venc = dtm.date(2026, 7, 28), dtm.date(2027, 7, 27)
+    fechas = [dtm.date(2026, 4, 30) + dtm.timedelta(days=30 * k) for k in range(24)]
+    esc = Escenarios(sendas={"IBR": Senda("IBR", fechas,
+                             {e: [0.1150] * len(fechas)
+                              for e in ("Alcista", "Base", "Bajista")})})
+    kw = dict(tipo="ibr", fecha_val=T, vencimiento=venc, tir=0.1280,
+              cupon_facial=0.0130, margen=0.0130, escenarios=esc)
+
+    # el primer cupón se paga el 27 de agosto y lee el 27 de julio
+    primero = H.calendario_cupones(venc, T, 12)[0]
+    leido = H.fecha_del_indice(primero, 1)
+    assert (primero, leido) == (dtm.date(2026, 8, 27), dtm.date(2026, 7, 27))
+    assert leido <= T
+
+    sin = H.calcular(**kw)[0].v0
+    con = H.calcular(**kw, historico={leido: 0.1150 + 0.02})[0].v0
+    assert con > sin                       # un IBR publicado más alto sube ese cupón
+
+    # una fecha que no es la del primer cupón no cambia nada
+    otra = H.calcular(**kw, historico={dtm.date(2026, 7, 1): 0.90})[0].v0
+    assert otra == pytest.approx(sin)
 
 
 def test_el_margen_del_hpr_es_el_de_la_tabla_de_curvas():
@@ -1361,8 +1388,8 @@ def test_hpr_cupon_y_marcas(valoraciones):
     # el índice de la tasa cupón se lee al inicio del período, un paso antes del pago,
     # en los dos índices: el cupón trimestral del 25 de agosto de 2026 usa el IPC de
     # mayo de 2026, y el mensual del 27 de agosto usa el IBR del 27 de julio
-    assert fecha_del_indice(dt.date(2026, 8, 25), 3, F_T, False) == dt.date(2026, 5, 25)
-    assert fecha_del_indice(dt.date(2026, 8, 27), 1, F_T, False) == dt.date(2026, 7, 27)
+    assert fecha_del_indice(dt.date(2026, 8, 25), 3) == dt.date(2026, 5, 25)
+    assert fecha_del_indice(dt.date(2026, 8, 27), 1) == dt.date(2026, 7, 27)
     registro = [f for f in esc.senda("IPC").fechas if f <= dt.date(2026, 5, 25)][-1]
     assert (registro.year, registro.month) == (2026, 5)
 
@@ -1371,12 +1398,8 @@ def test_hpr_cupon_y_marcas(valoraciones):
     for pagos, meses in ((4, 84), (12, 36)):
         primera = H.calendario_cupones(anclas_mensuales(F_T, meses)[meses].date(),
                                        F_T, pagos)[0]
-        assert fecha_del_indice(primera, 12 // pagos, F_T, False) <= F_T < primera
+        assert fecha_del_indice(primera, 12 // pagos) <= F_T < primera
 
-    # en modo plano, el que sostiene V₀ en IBR, las fechas futuras caen a la de
-    # valoración; las pasadas se dejan, por lo mismo de arriba
-    assert fecha_del_indice(dt.date(2027, 8, 27), 3, F_T, True) == F_T
-    assert fecha_del_indice(dt.date(2026, 8, 27), 3, F_T, True) == dt.date(2026, 5, 27)
     assert menos_meses(dt.date(2027, 3, 31), 1) == dt.date(2027, 2, 28)
 
     anclas = anclas_mensuales(F_T, 84)

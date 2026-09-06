@@ -18,12 +18,11 @@ de la ventana. No se promedia ni se interpola entre rangos.
         TF    TIR(T)
         IPC   (1 + margen) × (1 + IPC) − 1
         IBR   (1 + (IBR + margen) / 12)^12 − 1
-  - **V₀**: los cupones descontados con la tasa recompuesta con el índice de hoy,
-    que es la TIR del nodo. Cómo se proyectan esos cupones depende del tipo, ver
-    `V0_CON_ESCENARIO`: en IBR se aplana la senda al índice de hoy y V₀ sale igual
-    en los tres escenarios; en IPC cada cupón lee el índice tres meses antes de su
-    propio pago, también más allá de la valoración, así que V₀ cambia con el
-    escenario.
+  - **V₀**: los cupones descontados con la tasa recompuesta con el índice de hoy.
+    Los cupones se proyectan con la **senda del escenario elegido** —cada uno lee el
+    índice al inicio de su período, también más allá de la valoración—, así que V₀
+    cambia con el escenario en los dos bloques indexados: el precio de entrada
+    incorpora la expectativa.
   - **V₁** en el día h: los flujos posteriores, proyectados con el escenario y
     descontados desde h con la tasa recompuesta usando el índice proyectado en
     T+h y el margen desplazado por el delta.
@@ -43,13 +42,6 @@ from dataclasses import dataclass
 from .escenarios import Escenarios
 
 HORIZONTES = (90, 180)           # el tercero es el vencimiento
-
-# Tipos cuyo precio de entrada se proyecta con la senda del escenario elegido, en
-# vez de aplanarla al índice de hoy. Es una decisión de negocio, no una propiedad
-# del método: en IPC el cupón de cada período se lee tres meses antes de su pago
-# también más allá de la valoración, así que V₀ —y con él el precio de entrada—
-# cambia con el escenario. En IBR el precio de entrada sigue siendo plano.
-V0_CON_ESCENARIO = frozenset({"ipc"})
 PAGOS_POR_ANIO = {"fs": 4, "ipc": 4, "ibr": 12}
 INDICE_DE = {"ipc": "IPC", "ibr": "IBR"}
 
@@ -134,8 +126,7 @@ def _cupon(tipo: str, cupon_facial: float, indice: float, pagos: int) -> float:
     return (indice + cupon_facial) / pagos
 
 
-def fecha_del_indice(fecha_cupon: dt.date, paso: int, fecha_val: dt.date,
-                     plano: bool) -> dt.date:
+def fecha_del_indice(fecha_cupon: dt.date, paso: int) -> dt.date:
     """Con qué fecha se lee el índice del cupón que se paga en `fecha_cupon`.
 
     Se toma el índice del **inicio del período**, un paso antes del pago, tanto en
@@ -147,21 +138,25 @@ def fecha_del_indice(fecha_cupon: dt.date, paso: int, fecha_val: dt.date,
     En el primer cupón el inicio del período siempre cae en o antes de la fecha de
     valoración, así que ahí el índice es un dato publicado y no una proyección.
 
-    En modo plano, el que sostiene V₀, cualquier fecha posterior a la valoración se
-    reemplaza por la de valoración: así el precio de entrada no depende del escenario.
-    Las anteriores se dejan como están, por lo mismo de arriba.
-
-    Esto rige solo la **tasa cupón**. La tasa de descuento sigue usando el índice de
-    hoy en la entrada y el proyectado en T+h en la salida.
+    Esto rige solo la **tasa cupón**. La tasa de descuento es otra cosa: usa el
+    índice de hoy en la entrada y el proyectado en T+h en la salida.
     """
-    base = menos_meses(fecha_cupon, paso)
-    return fecha_val if (plano and base > fecha_val) else base
+    return menos_meses(fecha_cupon, paso)
 
 
 def _flujos(tipo: str, fechas: list[dt.date], vencimiento: dt.date,
             fecha_val: dt.date, cupon_facial: float, escenarios: Escenarios | None,
-            escenario: str, plano: bool) -> tuple[list[tuple[dt.date, float]], bool]:
-    """Flujos del título. `plano` proyecta todo con el índice de hoy."""
+            escenario: str,
+            historico: dict[dt.date, float] | None = None
+            ) -> tuple[list[tuple[dt.date, float]], bool]:
+    """Flujos del título, proyectados con la senda del escenario.
+
+    `historico` es la senda diaria publicada. Cuando se pasa, las lecturas que caen
+    en o antes de la valoración salen de ahí y no del archivo de escenarios: son
+    datos publicados, y es la misma fuente contra la que se calcula el margen. Si al
+    histórico le falta ese día se cae a la senda de proyección, para no dejar el
+    rango sin cifra.
+    """
     pagos = PAGOS_POR_ANIO[tipo]
     paso = 12 // pagos
     senda = None if tipo == "fs" else escenarios.senda(INDICE_DE[tipo])
@@ -170,9 +165,13 @@ def _flujos(tipo: str, fechas: list[dt.date], vencimiento: dt.date,
     for f in fechas:
         indice = 0.0
         if senda is not None:
-            indice, ex = senda.vigente(
-                fecha_del_indice(f, paso, fecha_val, plano), escenario)
-            extrapolado = extrapolado or ex
+            inicio = fecha_del_indice(f, paso)
+            publicado = (historico or {}).get(inicio) if inicio <= fecha_val else None
+            if publicado is not None:
+                indice = publicado
+            else:
+                indice, ex = senda.vigente(inicio, escenario)
+                extrapolado = extrapolado or ex
         flujo = _cupon(tipo, cupon_facial, indice, pagos)
         if f == vencimiento:
             flujo += 1.0
@@ -187,9 +186,12 @@ def _valor_presente(flujos, desde: dt.date, tasa: float) -> float:
 def calcular(*, tipo: str, fecha_val: dt.date, vencimiento: dt.date, tir: float,
              cupon_facial: float, margen: float, escenarios: Escenarios | None,
              escenario: str = "Base", delta_pb: float = 0.0,
-             horizontes=HORIZONTES,
-             indice_entrada: float | None = None) -> list[ResultadoHPR]:
+             horizontes=HORIZONTES, indice_entrada: float | None = None,
+             historico: dict[dt.date, float] | None = None) -> list[ResultadoHPR]:
     """HPR del CDT sintético de un rango, a cada horizonte y al vencimiento.
+
+    `historico` es la senda diaria publicada del índice: de ahí salen las lecturas
+    anteriores a la valoración, en vez del archivo de escenarios.
 
     `indice_entrada` es el índice con el que se recompone la tasa de entrada. Tiene
     que ser **el mismo** con el que se despejó `margen`: solo así los dos se
@@ -209,15 +211,10 @@ def calcular(*, tipo: str, fecha_val: dt.date, vencimiento: dt.date, tir: float,
         indice_hoy = 0.0 if senda is None else senda.vigente(fecha_val, escenario)[0]
 
     con_escenario, ex_esc = _flujos(tipo, fechas, vencimiento, fecha_val,
-                                    cupon_facial, escenarios, escenario, plano=False)
-    if tipo in V0_CON_ESCENARIO:
-        planos = con_escenario
-    else:
-        planos, _ = _flujos(tipo, fechas, vencimiento, fecha_val, cupon_facial,
-                            escenarios, escenario, plano=True)
+                                    cupon_facial, escenarios, escenario, historico)
 
     tasa_ent = tasa_descuento(tipo, tir, margen, indice_hoy)
-    v0 = 100 * _valor_presente(planos, fecha_val, tasa_ent)
+    v0 = 100 * _valor_presente(con_escenario, fecha_val, tasa_ent)
 
     delta = delta_pb / 10000.0
     fuera = []

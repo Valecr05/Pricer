@@ -24,7 +24,7 @@ import json
 
 from . import config as cfg
 from .config import DETAIL_LAYOUT, MarketParams
-from .hpr import HORIZONTES, INDICE_DE, PAGOS_POR_ANIO, V0_CON_ESCENARIO
+from .hpr import HORIZONTES, INDICE_DE, PAGOS_POR_ANIO
 
 
 def e(x) -> str:
@@ -439,13 +439,9 @@ function cuponPeriodo(tipo, facial, indice, pagos){
 
 // Con que fecha se lee el indice del cupon que se paga en `fechaCupon`: el del inicio
 // del periodo, un paso antes del pago, en IPC y en IBR. Es la convencion del atajo de
-// la bvc. En modo plano, el que sostiene V0, cualquier fecha posterior a la valoracion
-// se reemplaza por ella, para que el precio de entrada no dependa del escenario; las
-// anteriores se dejan, porque ahi el indice es dato publicado y no proyeccion.
-// Rige solo la tasa cupon: la de descuento usa el indice de hoy y el de T+h.
-function fechaDelIndice(fechaCupon, paso, fechaVal, plano){
-  var base = menosMeses(fechaCupon, paso);
-  return (plano && base > fechaVal) ? fechaVal : base;
+// la bvc. Rige solo la tasa cupon: la de descuento usa el indice de hoy y el de T+h.
+function fechaDelIndice(fechaCupon, paso){
+  return menosMeses(fechaCupon, paso);
 }
 
 function tasaDescuento(tipo, tir, margen, indice){
@@ -492,22 +488,26 @@ function rentabilidad(D, opciones){
 
   var extrap = false;
   var paso = 12 / pagos;
-  var construir = function(plano){
-    return fechas.map(function(f){
-      var idx = 0;
-      if(senda){
-        var v = vigente(senda, fechaDelIndice(f, paso, T, plano), opciones.escenario);
+  // Los cupones se proyectan con la senda del escenario, tambien mas alla de la
+  // valoracion: el precio de entrada incorpora la expectativa. Lo que cae en o antes
+  // de la valoracion sale de la senda diaria publicada —la misma contra la que se
+  // calcula el margen— y solo se cae a la de proyeccion si ese dia le falta.
+  var publicado = opciones.historico || {};
+  var conEscenario = fechas.map(function(f){
+    var idx = 0;
+    if(senda){
+      var ini = fechaDelIndice(f, paso);
+      var dato = (ini <= T) ? publicado[ini] : undefined;
+      if(dato === undefined || dato === null){
+        var v = vigente(senda, ini, opciones.escenario);
         idx = v[0]; extrap = extrap || v[1];
+      } else {
+        idx = dato;
       }
-      var c = cuponPeriodo(tipo, opciones.cupon, idx, pagos);
-      return [f, c + (f === venc ? 1 : 0)];
-    });
-  };
-  var conEscenario = construir(false);
-  // en los tipos que proyectan V0 con el escenario no hay una segunda pasada: el
-  // precio de entrada usa los mismos flujos que la salida
-  var planos = (D.hpr.v0ConEscenario || []).indexOf(tipo) >= 0
-               ? conEscenario : construir(true);
+    }
+    var c = cuponPeriodo(tipo, opciones.cupon, idx, pagos);
+    return [f, c + (f === venc ? 1 : 0)];
+  });
 
   var vpres = function(lista, desde, tasa){
     var s = 0;
@@ -518,7 +518,7 @@ function rentabilidad(D, opciones){
   };
 
   var tasaEnt = tasaDescuento(tipo, opciones.tir, opciones.margen, indiceHoy);
-  var V0 = 100 * vpres(planos, T, tasaEnt);
+  var V0 = 100 * vpres(conEscenario, T, tasaEnt);
   var delta = opciones.deltaPb / 10000;
 
   // los horizontes fijos, y al final el vencimiento. En esa ultima fila se usa
@@ -1197,6 +1197,8 @@ function filasHpr(){
   // con el que se despejo el margen real: los dos se cancelan y V0 descuenta a la
   // TIR del nodo. En los demas tipos manda el indice de la senda.
   var indiceEntrada = HPR.tipo === 'ipc' ? S.ipcT : null;
+  // la senda diaria publicada de IBR, para las lecturas anteriores a la valoracion
+  var publicada = HPR.tipo === 'ibr' ? ((rt().ibr || {}).historico || {}) : null;
   var fuera = [], excluidas = [];
   filas.forEach(function(r){
     var m = margenDelNodo(HPR.tipo, r);
@@ -1207,7 +1209,7 @@ function filasHpr(){
     var res = SX.rentabilidad(D, {
       tipo: HPR.tipo, fechaVal: S.t, vencimiento: venc, tir: r.brutaT,
       cupon: r.cuponT / 100, margen: m, escenario: HPR.escenario,
-      deltaPb: HPR.delta, indiceEntrada: indiceEntrada
+      deltaPb: HPR.delta, indiceEntrada: indiceEntrada, historico: publicada
     });
     if(!res){ excluidas.push(r); return; }
     fuera.push({ fila: r, venc: venc, margen: m, res: res });
@@ -1491,8 +1493,7 @@ def render(*, serie, seleccion: tuple[str, str], params: MarketParams,
         "escenarios": escenarios.para_json() if escenarios is not None and
                       escenarios.activo else None,
         "hpr": {"horizontes": list(HORIZONTES),
-                "pagos": dict(PAGOS_POR_ANIO), "indice": dict(INDICE_DE),
-                "v0ConEscenario": sorted(V0_CON_ESCENARIO)},
+                "pagos": dict(PAGOS_POR_ANIO), "indice": dict(INDICE_DE)},
         "generado": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "version": version,
         "tiempos": tiempos,

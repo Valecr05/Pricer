@@ -408,8 +408,8 @@ estar alineados en la fecha T.
 
 `hpr.py` lo implementa y `JS_CALC`, dentro de `report.py`, lo replica para que el navegador
 pueda recalcular al vuelo; las dos versiones se comparan celda por celda en las pruebas.
-`V0_CON_ESCENARIO` declara qué bloques proyectan V₀ con la senda —hoy, solo IPC— y
-`filasHpr` es quien pasa el IPC de la barra como índice de entrada.
+`filasHpr` es quien arma la llamada: pasa el IPC de la barra como índice de entrada en
+IPC, y la senda publicada del día en IBR.
 
 ### Cómo se construye
 
@@ -447,19 +447,28 @@ construcción es **la TIR del nodo**: el margen se despejó dividiendo por ese m
 índice, así que al multiplicarlo de vuelta el índice se cancela. Una sola tasa plana
 para todos los cupones.
 
-Cómo se proyectan esos cupones depende del bloque:
+**Los cupones se proyectan con la senda del escenario elegido, en los dos bloques
+indexados**: cada uno lee el índice al inicio de su período —tres meses antes del pago en
+IPC, un mes antes en IBR— también más allá de la fecha de valoración. Así que **V₀ cambia
+con el escenario**: comprar esperando más inflación, o más IBR, cuesta más hoy.
 
-| Bloque | Proyección de los cupones en V₀ |
+Es una decisión de negocio, no una propiedad del método. Hasta cierto punto V₀ se
+calculaba aplanando la senda al índice de hoy, de modo que el precio de entrada salía
+igual en los tres escenarios; eso hacía que el mismo botón moviera los dos bloques en
+sentidos opuestos, y por eso se retiró.
+
+Las fechas de índice **anteriores a la valoración** no son proyección sino dato
+publicado, y por eso se leen de la senda diaria real:
+
+| Bloque | De dónde sale lo ya publicado |
 |---|---|
-| **IPC** | con la **senda del escenario elegido**: cada cupón lee el índice tres meses antes de su propio pago, también más allá de la valoración. V₀ cambia con el escenario |
-| **IBR** | aplanada al índice de hoy: toda fecha de índice posterior a la valoración se reemplaza por la de valoración. V₀ es idéntico en los tres escenarios |
+| **IBR** | de `IB1.xlsx`, la misma senda contra la que se calcula el margen del atajo |
+| **IPC** | del propio archivo de escenarios, cuyas tres sendas coinciden en el pasado |
 
-En IPC es una decisión de negocio, no una propiedad del método: el precio de entrada
-incorpora la expectativa de inflación, así que comprar en el escenario alcista cuesta más
-hoy. La lista de bloques que se comportan así es `V0_CON_ESCENARIO`, en `hpr.py`.
-
-En los dos casos, las fechas de índice anteriores a la valoración se dejan como están,
-porque ahí el índice es un dato publicado y no una proyección.
+En IBR eso importa porque son dos archivos distintos: si el histórico y el archivo de
+escenarios no dijeran lo mismo de un día ya pasado, el margen y el cupón se separarían.
+Si a `IB1.xlsx` le faltara ese día, se cae a la senda de proyección en vez de dejar el
+rango sin cifra.
 
 **V₁**, en el día h, descuenta los flujos posteriores —proyectados con el escenario— a
 la tasa recompuesta con el índice proyectado en T+h y el margen desplazado por el delta.

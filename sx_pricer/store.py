@@ -33,12 +33,13 @@ import pandas as pd
 from . import config as cfg
 from .config import MarketParams
 from .curves import _grupo_tes, anclas_mensuales, nodos_por_ventana, universo_tes
+from .hpr import PAGOS_POR_ANIO, calendario_cupones, fecha_del_indice
 from .ibr import FuenteIBR, margen_atajo
 from .loader import SXFormatError, read_sx
 from .transform import build_valuation
 
 # Subir esta versión invalida todos los resúmenes en caché.
-SUMMARY_VERSION = 9
+SUMMARY_VERSION = 10
 
 # Campos del catálogo de instrumentos: no cambian entre fechas, así que se guardan
 # una sola vez por ISIN en lugar de repetirse en cada resumen.
@@ -143,6 +144,26 @@ def resumir(path: str | Path, *, params: MarketParams,
                 ]
             nodos[f"{spec.id}|{familia}"] = bloque
 
+    # Senda publicada que la pestaña de rentabilidades necesita. El cupón de cada
+    # período se lee al inicio del período; el del primer cupón cae en o antes de la
+    # valoración, así que es un dato publicado y sale de IB1.xlsx y no del archivo de
+    # escenarios — la misma fuente contra la que se calcula el margen. En la práctica
+    # todos los rangos comparten ese primer cupón, así que suele ser una sola fecha.
+    publicada: dict[str, float] = {}
+    if fuente_ibr is not None and fuente_ibr.historico:
+        for spec in cfg.BLOCKS:
+            if not spec.margen_atajo:
+                continue
+            pagos = PAGOS_POR_ANIO[spec.id]
+            for ancla in anclas_mensuales(fecha, spec.meses)[1:]:
+                venc = vencimiento_del_nodo(fecha, (ancla.date() - fecha).days)
+                cupones = calendario_cupones(venc, fecha, pagos)
+                if not cupones:
+                    continue
+                inicio = fecha_del_indice(cupones[0], 12 // pagos)
+                if inicio <= fecha and inicio in fuente_ibr.historico:
+                    publicada[inicio.isoformat()] = _n(fuente_ibr.historico[inicio])
+
     u = universo_tes(val.data).copy()
     u["grupo"] = _grupo_tes(u["nemotecnico"])
     u = u[~u["isin"].duplicated()].sort_values("dias")
@@ -179,6 +200,8 @@ def resumir(path: str | Path, *, params: MarketParams,
             # el margen se calcula con la curva del día hábil anterior
             "curva_usada": (_fecha(fuente_ibr.fecha_curva_usada(fecha))
                             if fuente_ibr is not None else None),
+            # lecturas publicadas que necesita la pestaña de rentabilidades
+            "historico": publicada,
             "motivo": motivo_ibr,
         },
         "cinta": archivo.raw_primer_registro,
