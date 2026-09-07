@@ -34,9 +34,10 @@ de la ventana. No se promedia ni se interpola entre rangos.
   - **HPR**: XIRR sobre −V₀ en el día 0, los cupones cobrados en sus días y +V₁ en
     el día h, en base ACT/365.
 
-Que entrada y salida usen la misma construcción es lo que hace el resultado
-consistente: con la senda del índice plana y delta cero, el HPR devuelve
-exactamente la tasa de entrada.
+Con la senda del índice plana y delta cero, el HPR devuelve exactamente la tasa de
+entrada. En IPC eso pide además que el índice de hoy —el de la barra— sea el mismo
+valor de esa senda plana: si no, V₀ y los flujos que se cobran quedan armados con
+inflaciones distintas y la diferencia aparece como rentabilidad.
 """
 from __future__ import annotations
 

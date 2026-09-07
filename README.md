@@ -352,6 +352,42 @@ Valorando el 28-jul-2026 un rango que vence el 27-jul-2027:
 | 27-abr-2027 | 27-ene-2027 | **6,140 % *(barra)*** | 6,442 % |
 | 27-jul-2027 | 27-abr-2027 | **6,140 % *(barra)*** | 6,592 % |
 
+Puesto en una línea de tiempo, con salida a 180 días:
+
+```
+                    HOY                  cupón 0        cupón 1        cupón 2      cupón 3 + capital
+                 28-jul-26              27-oct-26      27-ene-27      27-abr-27      27-jul-27
+                    T                     día 91        día 183        día 273        día 364
+  ──────────────────●──────────────────────●──────────────●──────────────●──────────────●──────────▶
+                    │                      │                     │
+                    │                 SALIDA 180 d               │
+                    │                  24-ene-27                 │
+                    ▼                      ▼                     └──── de aquí en adelante: V₁
+                  −V₀                 +cupón 0
+               en el día 0            en el día 91
+
+
+  ┌ V₀ · lo que pago hoy ────────────────────────────────────────────────────────────┐
+  │  cupón 0 → IPC del 27-jul-26, ya fijado    ← el único que mira hacia atrás       │
+  │  cupón 1 → IPC de la BARRA  ⎫                                                    │
+  │  cupón 2 → IPC de la BARRA  ⎬  el IPC de hoy, «pegado»: la senda no interviene   │
+  │  cupón 3 → IPC de la BARRA  ⎭                                                    │
+  │  descuento: una sola tasa = (1 + margen real) × (1 + IPC de la barra) − 1        │
+  └──────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌ Cupón cobrado y V₁ · lo que de verdad ocurre ────────────────────────────────────┐
+  │  cupón 0 → su IPC ya se fijó: igual en los tres escenarios                       │
+  │  cupones 1, 2 y 3 → IPC de tres meses antes de su pago, según la SENDA           │
+  │  descuento: una sola tasa, desde el día 180                                      │
+  │             (1 + margen real de T + δ) × (1 + IPC esperado el 24-ene-27) − 1     │
+  └──────────────────────────────────────────────────────────────────────────────────┘
+
+  HPR = XIRR sobre:   −V₀ (día 0)  ·  +cupón 0 (día 91)  ·  +V₁ (día 180)
+```
+
+Si un cupón intermedio se cobrara **después** del día 91 —posible con otros rangos a 180
+días— su IPC ya no estaría fijado y se proyectaría con la senda, como los de V₁.
+
 **V₀** descuenta esos flujos a una sola tasa: `(1 + IPC de la barra) × (1 + margen real) − 1`.
 Como el margen se despejó dividiendo por ese mismo IPC, **el IPC se cancela y la tasa de
 entrada es exactamente la TIR del nodo**.
@@ -408,19 +444,23 @@ traducen en unos 106 pb sobre la tasa de venta. Es deliberado.
 
 #### Conviene que `params.json` y el archivo de escenarios coincidan en T
 
-El margen se despeja con el IPC de la barra, pero la venta se recompone con el IPC que la
-**senda** proyecta en la fecha de salida. Si esos dos valores no coinciden en T, la brecha
-aparece como rentabilidad ya en el primer trimestre:
+El precio de entrada se arma con el IPC de la barra y los flujos que se cobran con la
+senda. Si esos dos valores no coinciden en T, la brecha aparece como rentabilidad — poco
+a 90 días, donde casi todo el peso está en la venta, y cada vez más a medida que se cobran
+cupones proyectados con la senda:
 
-| IPC de la barra (senda en T = 6,21 %) | HPR 90 d |
-|---|---|
-| 5,50 % | 8,92 % |
-| 6,14 % | 10,86 % |
-| **6,21 %** — igual que la senda | **11,07 %** |
-| 7,00 % | 13,49 % |
+| IPC de la barra (senda plana en 6,21 %) | V₀ | HPR 90 d | 180 d | Al venc. |
+|---|---|---|---|---|
+| 5,50 % | 98,0939 | 11,079 % | 11,443 % | 11,628 % |
+| 6,14 % | 98,5224 | 11,071 % | 11,107 % | 11,125 % |
+| **6,21 %** — igual que la senda | 98,5692 | **11,070 %** | **11,070 %** | **11,070 %** |
+| 7,00 % | 99,0952 | 11,069 % | 10,663 % | 10,459 % |
 
-No es un defecto del método: dice que el mercado descuenta hoy una inflación distinta a la
-que arranca la senda. Pero si no es eso lo que se quiere leer, los dos archivos tienen que
+Con los dos alineados, la fila devuelve limpiamente la tasa de entrada en los tres
+horizontes. Escribir un IPC por debajo del de la senda abarata la entrada y hace que los
+cupones que de verdad se cobren salgan más altos: eso rinde más, y al revés. No es un
+defecto del método —dice que el mercado descuenta hoy una inflación distinta a la que
+arranca la senda— pero si no es eso lo que se quiere leer, los dos archivos tienen que
 estar alineados en la fecha T.
 
 ### El bloque de IBR, de principio a fin
@@ -535,10 +575,10 @@ a flujo es `DESCUENTO_POR_FLUJO`, en `hpr.py`.
 
 Eso tiene una consecuencia que conviene tener presente: **en una senda que sube, el
 descuento sube más que el cupón**, porque lo lee un mes más tarde. Así que en IBR el
-escenario alcista **abarata** el papel hoy y por tanto le sube la rentabilidad, mientras
-que en IPC —donde la tasa de descuento es una sola y fija— lo **encarece** y se la baja.
-Los dos bloques se mueven en sentidos opuestos ante el mismo botón de escenario, y es por
-construcción, no por un error.
+escenario alcista **abarata** el papel hoy, y por eso le sube la rentabilidad. En IPC el
+alcista también rinde más, pero por otro camino: allí la senda no toca V₀ —el precio lleva
+el IPC de hoy pegado— y solo levanta los cupones que se cobran y la venta. Mismo signo,
+mecanismos distintos; está desarrollado más abajo.
 
 El margen es, en IPC, **el mismo número que muestra la columna «Margen real» de la
 pestaña de curvas**: despejado con el IPC que esté puesto en la barra de arriba, no con
@@ -604,17 +644,22 @@ de IBR, escenario Base:
 | 0 | 12,914 % | 13,073 % | 13,154 % |
 | +100 pb | 9,767 % | 12,005 % | 13,152 % |
 
-### Cuatro invariantes, fijados en las pruebas
+### Cinco invariantes, fijados en las pruebas
 
 1. Tasa fija al vencimiento con δ = 0 devuelve **exactamente su propia TIR**.
 2. El escenario **no mueve ni un decimal** en tasa fija, en ninguno de los tres
    horizontes: su cupón se conoce desde la negociación.
 3. Con la senda del índice plana y δ = 0, el HPR devuelve **exactamente la tasa de
    entrada** en IPC y en IBR. Es lo que garantiza que entrada y salida usan la misma
-   construcción y no aparecen ganancias fantasma.
+   construcción y no aparecen ganancias fantasma. En IPC pide además que el IPC de la
+   barra sea ese mismo valor de la senda: si no, V₀ y los flujos que se cobran quedan
+   armados con inflaciones distintas — es lo que se ve en la tabla de más arriba.
 4. En IPC, la **tasa de entrada es la TIR del nodo** para cualquier IPC que se escriba en
-   la barra, porque el mismo valor despeja el margen y lo recompone. Cambiar el IPC de
-   arriba no mueve V₀; mueve la venta.
+   la barra, porque el mismo valor despeja el margen y lo recompone. V₀ sí se mueve al
+   cambiar ese IPC —entra en los cupones del segundo en adelante—, pero la tasa a la que
+   se descuenta no.
+5. En IPC, **V₀ es el mismo en los tres escenarios**: la senda no interviene en el precio
+   de entrada.
 
 ### Dos advertencias que el reporte muestra
 
