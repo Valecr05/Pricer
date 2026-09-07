@@ -1291,18 +1291,17 @@ def test_v0_no_depende_del_escenario_en_ningun_bloque_indexado():
     # Con la senda plana, el HPR devuelve la tasa de entrada en IPC, en los tres
     # horizontes: entrada y salida usan la misma construcción.
     #
-    # En IBR no, y no es un descuido. La entrada descuenta a la «Tasa (T)» del rango
-    # —efectiva anual, tal como la envía el proveedor— y la salida rearma su tasa
-    # desde el margen y el IBR con la conversión 365/30. Son dos números distintos
-    # para un mercado que no se movió, así que a 90 y 180 días queda una brecha
-    # sistemática. Al vencimiento desaparece, porque ahí V₁ es el flujo final
-    # descontado un solo día y la tasa de venta casi no pesa.
+    # En IBR la igualdad al vencimiento es lo único que se puede pedir en este fixture.
     plana = Escenarios(sendas={k: Senda(k, fechas, {e: [b] * len(fechas)
                                                     for e in ESCENARIOS})
                                for k, b in (("IPC", 0.0614), ("IBR", 0.1150))})
     for r in (calcular("ipc", e, plana) for e in ESCENARIOS):
         for x in r:
             assert x.hpr == pytest.approx(x.tasa_entrada, abs=1e-9)
+    # Aquí la TIR del fixture (12,80 %) no es la que implica un margen de 1,30 %, así
+    # que a 90 y 180 días la diferencia entre las dos es rentabilidad legítima y no un
+    # residuo del método. La igualdad con margen coherente la fija
+    # test_el_hpr_de_ibr_se_acerca_a_la_tasa_de_entrada.
     for r in (calcular("ibr", e, plana) for e in ESCENARIOS):
         assert r[-1].hpr == pytest.approx(r[-1].tasa_entrada, abs=1e-4)
 
@@ -1392,17 +1391,159 @@ def test_v0_de_ibr_usa_la_curva_forward_y_descuenta_a_la_tasa_del_rango():
     assert sin.v0 != pytest.approx(r.v0)
 
 
-def test_la_tasa_de_venta_de_ibr_se_anualiza_con_365_sobre_30():
-    """`IBR + margen` es nominal mes vencido: periódica /12, y de ahí a E.A. con 365/30."""
-    from sx_pricer.hpr import PERIODOS_ANIO_IBR, tasa_descuento
+def test_ibr_no_tiene_una_tasa_de_descuento_unica():  # noqa: D401
+    """V₀ usa la «Tasa (T)» tal cual y V₁ descuenta período a período.
 
-    assert PERIODOS_ANIO_IBR == pytest.approx(365 / 30)
-    nominal = 0.1150 + 0.0130
-    ea = tasa_descuento("ibr", 0.13, 0.0130, 0.1150)
-    assert ea == pytest.approx((1 + nominal / 12) ** (365 / 30) - 1)
-    # no es la convención de doce períodos: son unos 20 pb más
-    doce = (1 + nominal / 12) ** 12 - 1
-    assert ea > doce and (ea - doce) * 1e4 == pytest.approx(20.1, abs=0.5)
+    Fabricar una tasa única para IBR —recomponerla desde el margen con la conversión
+    365/30— fue lo que abrió una brecha de hasta 211 pb entre la entrada y la salida.
+    Que la función se niegue evita que alguien vuelva a intentarlo por descuido.
+    """
+    from sx_pricer import hpr as H
+
+    assert H.tasa_descuento("fs", 0.13, 0.0, 0.0) == pytest.approx(0.13)
+    assert H.tasa_descuento("ipc", 0.13, 0.04, 0.06) == pytest.approx(1.04 * 1.06 - 1)
+    with pytest.raises(ValueError):
+        H.tasa_descuento("ibr", 0.13, 0.0130, 0.1150)
+    assert not hasattr(H, "PERIODOS_ANIO_IBR")
+
+
+def _mundo_ibr(T, nivel=0.1150, pendiente=0.0, dias=1700):
+    """Senda, histórico y curva coherentes: `pendiente` en pb por mes desde `nivel`."""
+    from sx_pricer.escenarios import ESCENARIOS, Escenarios, Senda
+
+    fechas = [T + dt.timedelta(days=k) for k in range(dias)]
+    valores = [nivel + pendiente / 10000 * (k / 30) for k in range(dias)]
+    esc = Escenarios(sendas={
+        "IBR": Senda("IBR", fechas, {e: list(valores) for e in ESCENARIOS}),
+        "IPC": Senda("IPC", fechas, {e: [0.0614] * dias for e in ESCENARIOS})})
+    historico = {T - dt.timedelta(days=k): nivel for k in range(400)}
+    curva = {f: v for f, v in zip(fechas[1:], valores[1:])}
+    return esc, historico, curva
+
+
+def test_v1_de_ibr_descuenta_periodo_a_periodo_con_el_indice_de_cada_cupon():
+    """Cada período usa el índice que fijó su propio cupón, no uno solo para todos.
+
+    La prueba que lo fija es la de par: un flotante cuyo margen iguala al cupón facial
+    vale exactamente par —capital más el cupón corrido—, cualquiera que sea el nivel
+    del índice y la pendiente de la senda. Es la propiedad que define a un flotante, y
+    solo sale si la tasa que arma el cupón es la misma que lo descuenta.
+    """
+    from sx_pricer import hpr as H
+    from sx_pricer.ibr import dias_360
+
+    T, venc, cupon = dt.date(2026, 7, 28), dt.date(2027, 7, 27), 0.0130
+    for pendiente in (0, 50, -50, 150):
+        esc, historico, curva = _mundo_ibr(T, pendiente=pendiente)
+        senda = esc.senda("IBR")
+        fechas = H.calendario_cupones(venc, T, 12)
+        flujos, _ = H._flujos("ibr", fechas, venc, T, cupon, esc, "Base", historico)
+        salida = T + dt.timedelta(days=90)
+        resto = [x for x in flujos if x[0] > salida]
+
+        # el par sucio: 100 más lo corrido desde que empezó el período en curso
+        primero = resto[0][0]
+        inicio = H.fecha_del_indice(primero, 1)
+        n1 = senda.vigente(inicio, "Base")[0]
+        par = 100 + (n1 + cupon) * dias_360(inicio, salida) / 360 * 100
+
+        v1 = 100 * H._valor_presente_previa(resto, salida, cupon)
+        assert v1 == pytest.approx(par, abs=0.001), pendiente
+
+
+def test_el_primer_periodo_de_v1_se_descuenta_solo_por_lo_que_le_falta():
+    """El exponente `L/K` va únicamente en el primer período, medido en 30/360.
+
+    Aplicarlo a todos, o medirlo en días reales, es el error clásico. Aquí el flujo
+    cae un día después de la salida y su tasa ya estaba fijada desde un mes antes:
+    modalidad previa. Se descuenta 1/30 de período, no 1/365 de año ni un período.
+    """
+    from sx_pricer import hpr as H
+    from sx_pricer.ibr import dias_360
+
+    T, venc = dt.date(2026, 7, 28), dt.date(2027, 7, 27)
+    esc, historico, _ = _mundo_ibr(T)
+    fechas = H.calendario_cupones(venc, T, 12)
+    flujos, _ = H._flujos("ibr", fechas, venc, T, 0.0130, esc, "Base", historico)
+    salida = T + dt.timedelta(days=90)                       # 26-oct-2026
+    resto = [x for x in flujos if x[0] > salida]
+    assert resto[0][0] == dt.date(2026, 10, 27)
+    assert dias_360(salida, resto[0][0]) == 1
+
+    solo_uno = H._valor_presente_previa(resto[:1], salida, 0.0130)
+    fecha, flujo, indice = resto[0]
+    assert solo_uno == pytest.approx(flujo * (1 + (indice + 0.0130) / 12) ** (-1 / 30))
+
+
+def test_el_hpr_de_ibr_se_acerca_a_la_tasa_de_entrada():
+    """Con todo plano y δ = 0 el HPR ya no queda 200 pb por debajo de la «Tasa (T)».
+
+    La referencia tiene que ser la TIR **coherente con el margen**: la que hace que el
+    atajo de la bvc devuelva ese mismo margen. Es el par que el reporte alimenta, y
+    contra cualquier otra TIR la diferencia es rentabilidad legítima, no residuo.
+
+    Recomponer una tasa única de salida desde el margen dejaba entre −58 y −211 pb a 90
+    días, creciendo con el plazo. Descontando V₁ período a período el residuo cae a 14
+    pb o menos. Lo que queda es el choque entre el 30/360 con que se arma el precio y el
+    ACT/365 con que el XIRR mide, y se cerrará cuando V₀ también se arme así.
+    """
+    from sx_pricer import hpr as H
+    from sx_pricer.ibr import margen_atajo
+
+    T = dt.date(2026, 7, 27)
+    esc, historico, curva = _mundo_ibr(T)
+
+    def tir_coherente(venc, margen):
+        lo, hi = 0.02, 0.60
+        for _ in range(200):
+            mid = (lo + hi) / 2
+            m = margen_atajo(fecha_val=T, vencimiento=venc, tir=mid,
+                             historico=historico, curva=curva)
+            if m < margen:
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2
+
+    for meses in (12, 24, 36):
+        venc = H.menos_meses(T, -meses)
+        for cupon, margen in ((0.0075, 0.0100), (0.0130, 0.0130), (0.0050, 0.0250)):
+            tir = tir_coherente(venc, margen)
+            r = H.calcular(tipo="ibr", fecha_val=T, vencimiento=venc, tir=tir,
+                           cupon_facial=cupon, margen=margen, escenarios=esc,
+                           escenario="Base", historico=historico, curva=curva)
+            for x in r:
+                assert abs(x.hpr - tir) < 0.0020, (meses, cupon, margen, x.dias)
+            assert r[-1].hpr == pytest.approx(tir, abs=1e-5)   # al vencimiento, exacto
+            assert all(x.tasa_salida is None for x in r)
+
+
+def test_mover_el_margen_mueve_el_hpr_de_ibr():
+    """Es para lo que existe el delta: si se mueve el margen, se mueve el HPR.
+
+    La sensibilidad crece con el plazo —más duración— y se apaga al vencimiento,
+    donde V₁ es el flujo final descontado un solo día.
+    """
+    from sx_pricer import hpr as H
+
+    T, tir = dt.date(2026, 6, 27), 0.1324
+    esc, historico, curva = _mundo_ibr(T)
+    esperado = {12: -3.2, 24: -7.1, 36: -10.5}          # pb de HPR por pb de margen
+    for meses, pendiente in esperado.items():
+        venc = H.menos_meses(T, -meses)
+
+        def hpr(delta_pb):
+            return H.calcular(tipo="ibr", fecha_val=T, vencimiento=venc, tir=tir,
+                              cupon_facial=0.0075, margen=0.0100, escenarios=esc,
+                              escenario="Base", delta_pb=delta_pb,
+                              historico=historico, curva=curva)
+
+        arriba, abajo = hpr(1), hpr(-1)
+        a_90 = (arriba[0].hpr - abajo[0].hpr) / 2 * 10000
+        assert a_90 == pytest.approx(pendiente, abs=0.2), meses
+        # a 180 días pesa la mitad, y al vencimiento casi nada
+        assert abs((arriba[1].hpr - abajo[1].hpr) / 2 * 10000) < abs(a_90)
+        assert abs(arriba[2].hpr - abajo[2].hpr) < 1e-5
 
 
 def test_lo_pasado_sale_de_la_senda_publicada():
@@ -1595,7 +1736,10 @@ def test_el_navegador_calcula_el_mismo_hpr(reporte_completo, valoraciones):
                         assert a.v0 == pytest.approx(b["v0"], abs=5e-8)
                         assert a.v1 == pytest.approx(b["v1"], abs=5e-8)
                         assert a.tasa_entrada == pytest.approx(b["te"], abs=1e-12)
-                        assert a.tasa_salida == pytest.approx(b["ts"], abs=1e-12)
+                        if tipo == "ibr":       # no hay una sola tasa de salida
+                            assert a.tasa_salida is None and b["ts"] is None
+                        else:
+                            assert a.tasa_salida == pytest.approx(b["ts"], abs=1e-12)
                         assert (a.dias, a.cupones) == (b["dias"], b["cup"])
                         assert (a.al_vencimiento, a.extrapolado) == (b["av"], b["ex"])
                         comparadas += 6

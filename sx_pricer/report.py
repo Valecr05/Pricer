@@ -24,7 +24,7 @@ import json
 
 from . import config as cfg
 from .config import DETAIL_LAYOUT, MarketParams
-from .hpr import HORIZONTES, INDICE_DE, PAGOS_POR_ANIO, PERIODOS_ANIO_IBR
+from .hpr import HORIZONTES, INDICE_DE, PAGOS_POR_ANIO
 
 
 def e(x) -> str:
@@ -316,6 +316,14 @@ function etiquetaMes(iso){
 function diasEntre(a, b){
   return Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 }
+// Base 30/360 US/NASD, igual que DAYS360 de Excel con metodo FALSO. Es la base en la
+// que se mide el tiempo dentro del precio de un flotante IBR.
+function dias360(a, b){
+  var p = a.split('-'), q = b.split('-');
+  var d1 = Math.min(+p[2], 30), d2 = +q[2];
+  if(d2 === 31 && d1 === 30) d2 = 30;
+  return (+q[0] - +p[0]) * 360 + (+q[1] - +p[1]) * 30 + (d2 - d1);
+}
 
 function nodos(D, rt, rt1, blockId, familia, ipcT, ipcT1){
   var clave = blockId + '|' + familia;
@@ -439,18 +447,19 @@ function cuponPeriodo(tipo, facial, indice, pagos){
 
 // Con que fecha se lee el indice del cupon que se paga en `fechaCupon`: el del inicio
 // del periodo, un paso antes del pago, en IPC y en IBR. Es la convencion del atajo de
-// la bvc. Rige solo la tasa cupon: la de descuento usa el indice de hoy y el de T+h.
+// la bvc. En IPC rige solo la tasa cupon; en IBR rige tambien el descuento de V1, que
+// usa para cada periodo el mismo indice que fijo su cupon.
 function fechaDelIndice(fechaCupon, paso){
   return menosMeses(fechaCupon, paso);
 }
 
-// En IBR la suma indice + margen es nominal mes vencido: se divide entre 12 para la
-// periodica y se lleva a efectiva anual con el exponente 365/30 —un anio de 365 dias
-// sobre un mes de 30—, no con 12.
-function tasaDescuento(tipo, tir, margen, indice, periodos){
+// Tasa efectiva anual unica con la que se descuenta. Solo en tasa fija y en IPC: IBR
+// no tiene una, porque su V0 usa la «Tasa (T)» tal cual y su V1 descuenta periodo a
+// periodo (ver vpresPrevia).
+function tasaDescuento(tipo, tir, margen, indice){
   if(tipo === 'fs') return tir;
   if(tipo === 'ipc') return (1 + margen) * (1 + indice) - 1;
-  return Math.pow(1 + (indice + margen) / 12, periodos) - 1;
+  throw new Error('tasaDescuento no aplica a ' + tipo + ': no tiene una tasa unica');
 }
 
 function xirr(flujos){
@@ -519,7 +528,8 @@ function rentabilidad(D, opciones){
         }
       }
       var c = cuponPeriodo(tipo, opciones.cupon, idx, pagos);
-      return [f, c + (f === venc ? 1 : 0)];
+      // el indice viaja con el flujo: en IBR es tambien el que descuenta ese periodo
+      return [f, c + (f === venc ? 1 : 0), idx];
     });
   };
   var conEscenario = construir(null, false);
@@ -531,19 +541,31 @@ function rentabilidad(D, opciones){
     }
     return s;
   };
-  var periodos = D.hpr.periodosAnioIbr;
+  // Precio de un flotante IBR, periodo a periodo y en base 30/360. Cada periodo se
+  // descuenta con el indice que fijo su propio cupon mas el margen —nominal mes
+  // vencido, dividido entre `pagos`— y del primero solo la fraccion que falta.
+  var vpresPrevia = function(lista, desde, margen){
+    var acum = 1, total = 0, lPrev = 0, porPeriodo = 360 / pagos;
+    for(var i = 0; i < lista.length; i++){
+      var l = dias360(desde, lista[i][0]);
+      acum *= Math.pow(1 + (lista[i][2] + margen) / pagos, -(l - lPrev) / porPeriodo);
+      total += acum * lista[i][1];
+      lPrev = l;
+    }
+    return total;
+  };
 
   // el precio de entrada: convencion del proveedor, distinta en cada indice
   var flujosV0, tasaEnt;
   if(tipo === 'ipc'){
     flujosV0 = construir(indiceHoy, false);
-    tasaEnt = tasaDescuento(tipo, opciones.tir, opciones.margen, indiceHoy, periodos);
+    tasaEnt = tasaDescuento(tipo, opciones.tir, opciones.margen, indiceHoy);
   } else if(tipo === 'ibr'){
     flujosV0 = construir(null, true);
     tasaEnt = opciones.tir;            // la «Tasa (T)» del rango, ya efectiva anual
   } else {
     flujosV0 = conEscenario;
-    tasaEnt = tasaDescuento(tipo, opciones.tir, opciones.margen, indiceHoy, periodos);
+    tasaEnt = tasaDescuento(tipo, opciones.tir, opciones.margen, indiceHoy);
   }
   var V0 = 100 * vpres(flujosV0, T, tasaEnt);
   var delta = opciones.deltaPb / 10000;
@@ -558,12 +580,20 @@ function rentabilidad(D, opciones){
     var h = Math.min(pedido, diasVenc - 1);
     var salida = sumarDias(T, h);
     var vs = senda ? vigente(senda, salida, opciones.escenario) : [0, false];
-    var tasaSal = tasaDescuento(tipo, opciones.tir + delta, opciones.margen + delta,
-                                vs[0], periodos);
-
+    // Un cupon que cae justo en la fecha de salida se cobra —entra en el XIRR en el
+    // dia h— y no forma parte de V1.
     var cupones = conEscenario.filter(function(x){ return x[0] > T && x[0] <= salida; });
     var resto = conEscenario.filter(function(x){ return x[0] > salida; });
-    var V1 = 100 * vpres(resto, salida, tasaSal);
+    var tasaSal, V1;
+    if(tipo === 'ibr'){
+      // V1 periodo a periodo con la senda del escenario haciendo de curva forward.
+      // No queda una sola tasa de salida que reportar: hay una por periodo.
+      tasaSal = null;
+      V1 = 100 * vpresPrevia(resto, salida, opciones.margen + delta);
+    } else {
+      tasaSal = tasaDescuento(tipo, opciones.tir + delta, opciones.margen + delta, vs[0]);
+      V1 = 100 * vpres(resto, salida, tasaSal);
+    }
 
     var cf = [[0, -V0]];
     cupones.forEach(function(x){ cf.push([diasEntre(T, x[0]), 100 * x[1]]); });
@@ -1525,7 +1555,7 @@ def render(*, serie, seleccion: tuple[str, str], params: MarketParams,
                       escenarios.activo else None,
         "hpr": {"horizontes": list(HORIZONTES),
                 "pagos": dict(PAGOS_POR_ANIO), "indice": dict(INDICE_DE),
-                "periodosAnioIbr": PERIODOS_ANIO_IBR},
+                },
         "generado": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "version": version,
         "tiempos": tiempos,

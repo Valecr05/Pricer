@@ -466,10 +466,11 @@ estar alineados en la fecha T.
 ### El bloque de IBR, de principio a fin
 
 Misma estructura que el de IPC, con tres diferencias: el cupón es **mensual**, el índice
-se lee **un mes** antes del pago, y las dos tasas de descuento —la de entrada y la de
-salida— **no salen de la misma cuenta**: la entrada usa la «Tasa (T)» que envía el
-proveedor tal cual, y la salida se rearma desde el margen del atajo. Cada una es una sola
-tasa para todo su bloque; no hay descuento flujo a flujo.
+se lee **un mes** antes del pago, y **la salida no tiene una sola tasa de descuento**.
+V₀ sigue descontando a la «Tasa (T)» que envía el proveedor, tal cual; **V₁ se arma
+período a período por el método de la Calculadora IBR de la bvc**, con la senda del
+escenario haciendo de curva forward. Eso es lo que permite responder la pregunta para la
+que existe esta pestaña: si el margen se mueve, ¿cuánto se mueve el HPR?
 
 **Los tres insumos**, del nodo del bloque IBR · CDT en la fecha T:
 
@@ -534,10 +535,9 @@ Puesto en una línea de tiempo, con salida a 90 días:
   ┌ Cupones cobrados y V₁ · lo que de verdad ocurre ─────────────────────────────────┐
   │  cupón 0 → su IBR ya se publicó: igual en los tres escenarios                    │
   │  cupones 1 en adelante → IBR de un mes antes de su pago, según la SENDA          │
-  │  descuento: una sola tasa, desde el día 90                                       │
-  │      nominal   = margen del atajo + δ + IBR esperado el 26-oct-26                │
-  │      periódica = nominal / 12                                                    │
-  │      E.A.      = (1 + periódica)^(365/30) − 1                                    │
+  │  descuento de V₁: NO una tasa, sino una por período, desde el día 90             │
+  │      factor_i = (1 + (N_i + margen del atajo + δ)/12) ^ (−e_i)                   │
+  │      el mismo N_i que armó el cupón; e_1 = days360(26-oct-26, d_1)/30, e_i = 1   │
   └──────────────────────────────────────────────────────────────────────────────────┘
 
   HPR = XIRR sobre:  −V₀ (día 0) · +cupón 0 (día 30) · +cupón 1 (día 61) · +V₁ (día 90)
@@ -557,59 +557,120 @@ rentabilidad, pero mezclada con el efecto de la tasa de entrada —que también 
 la curva, porque el margen del atajo se calcula contra ella—, así que no es un residuo
 limpio como el de la tabla de IPC.
 
-**Las dos tasas de descuento**, cada una única para su bloque:
+**Las dos tasas de descuento** ya no son simétricas:
 
 ```
 V₀ :  la «Tasa (T)» del rango, tal cual — ya viene efectiva anual del proveedor
+      una sola tasa, base ACT/365
 
-V₁ :  nominal   = margen del atajo + δ + IBR esperado en T+h
-      periódica = nominal / 12
-      E.A.      = (1 + periódica)^(365/30) − 1
+V₁ :  NO hay una sola tasa. Por cada período que queda:
+
+        factor_i = ( 1 + (N_i + margen del atajo + δ) / 12 ) ^ (−e_i)
+
+        N_i  el IBR que fijó el cupón de ese período — el mismo número
+        e_1  = days360(T+h, d_1) / 30    ← solo el primer período, el roto
+        e_i  = 1                          ← los demás, período completo
+        V₁   = Σ ( factor_1 × ... × factor_i ) × flujo_i
 ```
 
-El exponente es **365/30**, un año de 365 días sobre un mes de 30 — son 12,1667 períodos,
-no 12. Con margen 1,30 % e IBR 11,50 % eso da 13,7793 % en vez de 13,5783 %: **20 pb** de
-diferencia.
+El `e_i = 1` de los períodos completos no depende de que el mes tenga 28 o 31 días: la
+base es **30/360**, no ACT. Y el exponente `L/K` va **únicamente en el primero**;
+aplicarlo a todos es el error clásico del método.
+
+Con Tasa (T) 12,80 %, cupón y margen en 1,30 %, curva e histórico planos en 11,50 % y
+sendas que se separan ±1,5 pb por mes desde ese mismo valor:
 
 | Escenario | V₀ | HPR 90 d | 180 d | Al venc. |
 |---|---|---|---|---|
-| Alcista | 100,0290 | 13,473 % | 12,794 % | 12,941 % |
-| Base | 100,0290 | 11,829 % | 12,174 % | 12,348 % |
-| Bajista | 100,0290 | 10,200 % | 11,555 % | 11,757 % |
+| Alcista | 100,6816 | 10,513 % | 11,983 % | 12,888 % |
+| Base | 100,6816 | 10,497 % | 11,942 % | 12,797 % |
+| Bajista | 100,6816 | 10,481 % | 11,902 % | 12,707 % |
 
 | δ | HPR 90 d | 180 d | Al venc. |
 |---|---|---|---|
-| −50 pb | 13,455 % | 12,719 % | 12,350 % |
-| 0 | 11,829 % | 12,174 % | 12,348 % |
-| +100 pb | 8,651 % | 11,093 % | 12,345 % |
+| −50 pb | 12,075 % | 12,480 % | 12,799 % |
+| 0 | 10,497 % | 11,942 % | 12,797 % |
+| +100 pb | 7,409 % | 10,876 % | 12,795 % |
 
-Mismo V₀ en los tres escenarios, y el alcista rinde más — igual que en IPC.
+Mismo V₀ en los tres escenarios, y el alcista sigue rindiendo más. Pero fíjese en la
+escala: **el escenario mueve 3 pb y el delta mueve 1.578 pb.** No es un error, y merece
+su propia sección.
 
-#### Una brecha sistemática entre la entrada y la salida
+#### El escenario casi no mueve el HPR de IBR, y así debe ser
 
-Las dos tasas de arriba no son el mismo número aunque el mercado no se mueva: la entrada
-usa la Tasa (T) que envía el proveedor y la salida la rearma desde el margen con la
-conversión 365/30.
+Un flotante está diseñado para que su precio **no dependa del nivel del índice**: si el
+IBR sube, suben a la vez el cupón que paga y la tasa a la que se descuenta, y los dos
+efectos se cancelan. Eso es lo que ahora ocurre dentro de V₁, porque el cupón y el
+descuento comparten `N_i`. Lo único que sobrevive es el índice de los **cupones que de
+verdad se cobran** entre T y T+h, que sí son plata en el bolsillo.
 
-El experimento que lo aísla es poner **la curva `IND_IBR`, la senda y el histórico de
-`IB1.xlsx` los tres planos en 11,50 %**, el cupón del rango en 1,30 %, y elegir para cada
-ventana la TIR que hace que el atajo de la bvc devuelva exactamente ese 1,30 % de margen.
-Así no queda ninguna expectativa de movimiento y el margen es, por construcción,
-coherente con la TIR. Aun así el HPR no devuelve la tasa de entrada:
+Separación entre el HPR Alcista y el Bajista, según cuánto se abran las sendas:
 
-| Ventana | TIR del nodo = tasa de entrada | Tasa de venta | HPR 90 d | 180 d | Al vencimiento |
+| sendas ±  | plazo | 90 d | 180 d | al vencimiento |
+|---|---|---|---|---|
+| 1,5 pb/mes | 12 m | 3,3 pb | 8,1 pb | 18,2 pb |
+| 1,5 pb/mes | 36 m | 3,1 pb | 7,9 pb | 55,2 pb |
+| 10 pb/mes | 12 m | 21,7 pb | 54,2 pb | 121,5 pb |
+| 10 pb/mes | 36 m | 20,8 pb | 52,9 pb | 368,2 pb |
+| 30 pb/mes | 12 m | 65,1 pb | 162,7 pb | 364,6 pb |
+| 30 pb/mes | 36 m | 62,3 pb | 158,8 pb | 1.104,5 pb |
+
+A 90 días casi nada, porque solo se alcanzan a cobrar dos o tres cupones; al vencimiento
+mucho, porque se cobran todos. **Antes del cambio el escenario movía cientos de puntos
+básicos ya a 90 días**, y era un artefacto: los cupones se proyectaban con la senda
+entera mientras el descuento leía un solo punto de ella, así que la asimetría aparecía
+como rentabilidad. En IBR la pregunta que mueve el número es el **margen**, no el nivel
+del índice — que es justo para lo que existe el campo de delta.
+
+#### Por qué el cupón y el descuento comparten `N_i`
+
+Es la pieza que hace que el método funcione, y conviene verla con un número. Un flotante
+cuyo **margen iguala a su cupón facial** vale exactamente par —capital más el cupón
+corrido—, sea cual sea el nivel del índice y la pendiente de la senda. Es la definición
+de un flotante. Nodo que vence el 27-jul-27, salida a 90 días, cupón y margen los dos en
+1,30 %:
+
+| senda | par sucio | V₁ con `N_i` atado | desvío | V₁ con una sola tasa | desvío |
 |---|---|---|---|---|---|
-| 12 meses | 13,571 % | 13,779 % | −56,0 pb | −18,8 pb | −0,1 pb |
-| 24 meses | 13,572 % | 13,779 % | −129,2 pb | −55,6 pb | −0,0 pb |
-| 36 meses | 13,572 % | 13,779 % | −190,2 pb | −86,9 pb | −0,0 pb |
+| plana 11,50 % | 101,03111 | 101,03093 | **−0,0002** | 100,92819 | −0,1029 |
+| sube 5 pb/mes | 101,03930 | 101,03912 | **−0,0002** | 101,07772 | +0,0384 |
+| baja 5 pb/mes | 101,02292 | 101,02274 | **−0,0002** | 100,77842 | −0,2445 |
+| sube 15 pb/mes | 101,05568 | 101,05549 | **−0,0002** | 101,37608 | +0,3204 |
 
-Las dos tasas quedan separadas por unos **21 pb** en las tres ventanas: la de venta sale
-de `(1 + (11,50 % + 1,30 %)/12)^(365/30) − 1`, y la de entrada del proveedor, que descuenta
-contra la curva forward completa. Al vencimiento la brecha desaparece, porque ahí V₁ es el
-flujo final descontado un solo día y la tasa de venta casi no pesa. A 90 y 180 días sí
-queda, y **crece con el plazo**: la duración amplifica esos 21 pb, por eso 36 meses pierde
-tres veces más que 12 meses. En IPC esto no pasa: allí la misma inflación despeja el
-margen y lo recompone, y los dos se cancelan.
+Con una sola tasa el error **cambia de signo con la pendiente**: un único IBR no puede
+representar toda la senda. Atando los dos, el par sale solo. Por eso `_flujos` devuelve
+el índice pegado a cada flujo, en vez de dejar que el cupón y el descuento lo lean por
+separado.
+
+#### Lo que queda de brecha entre la entrada y la salida
+
+V₀ descuenta a la «Tasa (T)» del proveedor en ACT/365 y V₁ se arma en 30/360: no son la
+misma cuenta, así que la igualdad es aproximada.
+
+El experimento que lo aísla pone **la curva `IND_IBR`, la senda y el histórico de
+`IB1.xlsx` los tres planos en 11,50 %** y usa, como referencia, la **TIR coherente con el
+margen**: la que hace que el atajo de la bvc devuelva exactamente ese margen. Esa es la
+comparación honesta, porque es el par que el reporte alimenta —la Tasa (T) del proveedor
+y el margen calculado *a partir de ella*—. Contra cualquier otra TIR la diferencia es
+rentabilidad legítima y no residuo del método.
+
+| Ventana | cupón · margen | TIR coherente | **antes** 90 d | **ahora** 90 d | antes 180 d | ahora 180 d |
+|---|---|---|---|---|---|---|
+| 12 meses | 0,75 % · 1,00 % | 13,2359 % | −57,7 pb | **−12,6 pb** | −19,4 pb | −12,1 pb |
+| 12 meses | 0,50 % · 2,50 % | 14,9284 % | −65,4 pb | **−14,2 pb** | −22,0 pb | −13,7 pb |
+| 24 meses | 0,75 % · 1,00 % | 13,2359 % | −126,4 pb | **−0,4 pb** | −54,4 pb | −5,9 pb |
+| 24 meses | 0,50 % · 2,50 % | 14,9284 % | −143,0 pb | **−0,0 pb** | −61,7 pb | −6,5 pb |
+| 36 meses | 0,75 % · 1,00 % | 13,2359 % | −186,5 pb | **−1,1 pb** | −85,2 pb | −6,3 pb |
+| 36 meses | 0,50 % · 2,50 % | 14,9284 % | −210,7 pb | **−0,6 pb** | −96,3 pb | −6,8 pb |
+
+La columna «antes» es lo que dejaba recomponer una sola tasa de salida desde el margen:
+crecía con el plazo hasta más de 200 pb. La de «ahora» se queda en **14 pb o menos**, y ya
+no crece: lo que resta es el choque entre el 30/360 con que se arma el precio y el ACT/365
+con que el XIRR mide el tiempo. Al vencimiento la igualdad es exacta en los dos casos,
+porque ahí V₁ es el flujo final descontado un solo día.
+
+Ese residuo se cerrará cuando **V₀ también se arme por este método**, que es el punto que
+quedó aplazado.
 
 #### Los dos bloques rinden más con el escenario alcista, por razones distintas
 
@@ -627,22 +688,15 @@ número escrito a mano en IPC, una curva de mercado en IBR.
 
 #### Lo que queda por confirmar en este bloque
 
-**La tasa de entrada y la de salida no son la misma cuenta.** La entrada es la «Tasa (T)»
-del proveedor, tal cual. La salida se rearma desde el margen del atajo, el IBR esperado y
-la conversión 365/30. Aunque el mercado no se mueva quedan separadas —21 pb en el
-experimento de arriba— y eso se traduce en un HPR por debajo de la tasa de entrada a 90 y
-180 días. En IPC no ocurre, porque allí el mismo IPC despeja el margen y lo recompone.
+**V₀ todavía no se arma con el método de la bvc.** V₁ ya descuenta período a período en
+30/360; V₀ sigue descontando todos sus flujos a la «Tasa (T)» del proveedor en ACT/365,
+con los cupones leídos de la curva `IND_IBR`. De ahí sale el residuo de 14 pb o menos de
+la tabla anterior.
 
-Hay tres salidas posibles y ninguna se ha elegido todavía:
-
-| | Qué implica |
-|---|---|
-| **Dejarlo así** | es lo que hoy corre. Entrada y salida son cada una la convención que pidió el negocio, y la brecha es el precio de mezclarlas |
-| **Descontar la entrada con la misma recomposición** que la salida | el HPR devolvería la tasa de entrada con todo plano, pero V₀ ya no sería el precio del proveedor |
-| **Rearmar la salida desde la Tasa (T)** en vez de desde el margen | conserva V₀, pero el delta dejaría de moverse sobre el margen |
-
-Queda **pendiente de decisión** hasta que se confirmen las rentabilidades esperadas de
-los dos bloques indexados; ver la sección de pendientes al final.
+Alinear V₀ es el siguiente paso natural y está **aplazado a propósito**: cambia el precio
+de entrada, que es la cifra que se concilia contra el proveedor, y esa conciliación tiene
+que hacerse aparte. Cuando se haga, V₀ leería los mismos pasos 1 a 4 pero con la curva
+`IND_IBR` en lugar de la senda, y con el margen del atajo sin delta.
 
 ### Dónde está en el código
 
@@ -651,9 +705,15 @@ pueda recalcular al vuelo; las dos versiones se comparan celda por celda en las 
 `filasHpr` es quien arma la llamada: en IPC pasa el IPC de la barra como índice de
 entrada, y en IBR pasa las dos fuentes que V₀ necesita —el histórico publicado de
 `IB1.xlsx` y la curva forward `IND_IBR`—, ambas embebidas en el HTML por `store.py`.
-Dentro de `calcular`, un `if` por tipo elige la convención de V₀; no hay tabla de
-banderas, porque cada bloque hace algo distinto y explicarlo en una constante salía peor
-que escribirlo.
+Dentro de `calcular`, un `if` por tipo elige la convención de V₀ y otra la de V₁; no hay
+tabla de banderas, porque cada bloque hace algo distinto y explicarlo en una constante
+salía peor que escribirlo.
+
+`_flujos` devuelve `(fecha, flujo, índice)`: el índice viaja pegado al flujo porque en
+IBR **la tasa que fijó el cupón es la misma que descuenta ese período**, y dejar que las
+dos partes lo lean por separado es justo como se rompe. `_valor_presente_previa` es el
+descuento período a período; `tasa_descuento` se **niega** a atender a IBR, para que
+nadie vuelva a fabricarle una tasa única por descuido.
 
 ### Cómo se construye
 
@@ -676,12 +736,13 @@ todos los bloques:
 |---|---|---|---|
 | Tasa fija | `cupón / 4` | `TIR(T)` | `TIR(T) + δ` |
 | IPC | `((1+IPC_inicio) × (1+cupón))^(1/4) − 1` | `(1 + margen) × (1 + IPC de la barra) − 1` | `(1 + margen + δ) × (1 + IPC en T+h) − 1` |
-| IBR | `(IBR_inicio + cupón) / 12` | la **«Tasa (T)» del rango**, tal cual | `(1 + (IBR en T+h + margen + δ)/12)^(365/30) − 1` |
+| IBR | `(IBR_inicio + cupón) / 12` | la **«Tasa (T)» del rango**, tal cual | **una tasa por período**: `(1 + (IBR_inicio + margen + δ)/12)^(−e_i)` |
 
-En IBR la suma `IBR + margen` es **nominal mes vencido**, igual que la del cupón, así que
-se recompone a efectiva anual antes de aplicarla en base ACT/365 — con el exponente
-**365/30**, no 12. El precio de entrada no pasa por esa recomposición: descuenta a la
-«Tasa (T)» del rango, que ya viene efectiva anual del proveedor.
+En IBR la salida no tiene una sola tasa. Cada período se descuenta con **el mismo índice
+que fijó su cupón** más el margen del atajo desplazado por el delta —nominal mes vencido,
+dividido entre 12— y del primero solo la fracción de período que falta, medida en 30/360.
+Es el método de la Calculadora IBR de la bvc. El precio de entrada sí usa una sola tasa:
+la «Tasa (T)» del rango, que ya viene efectiva anual del proveedor.
 
 El margen es, en IPC, **el mismo número que muestra la columna «Margen real» de la
 pestaña de curvas**: despejado con el IPC que esté puesto en la barra de arriba, no con
@@ -722,8 +783,11 @@ escenarios no dijeran lo mismo de un día ya pasado, el margen y el cupón se se
 Si a `IB1.xlsx` le faltara ese día, se cae a la senda de proyección en vez de dejar el
 rango sin cifra.
 
-**V₁**, en el día h, descuenta los flujos posteriores —proyectados con el escenario— a
-la tasa recompuesta con el índice proyectado en T+h y el margen desplazado por el delta.
+**V₁**, en el día h, toma los flujos **posteriores** al día h, proyectados con el
+escenario. En tasa fija y en IPC los descuenta a una sola tasa, recompuesta con el índice
+proyectado en T+h y el margen desplazado por el delta. En IBR los descuenta período a
+período por el método de la bvc, descrito arriba. Un cupón que cae **justo** en el día h
+se cobra —entra en el XIRR en ese día— y no forma parte de V₁.
 
 **HPR** = XIRR por Newton (semilla 10 %, tolerancia 1e-11) sobre `−V₀` en el día 0, los
 cupones cobrados en sus días y `+V₁` en el día h, base ACT/365. Al vencimiento,
@@ -737,7 +801,7 @@ Siempre sobre la tasa de **salida**; la de entrada nunca se mueve.
 |---|---|---|
 | Tasa fija | la TIR, porque no hay margen | `TIR(T) + δ` |
 | IPC | el margen | `(1 + margen + δ) × (1 + IPC_proy(T+h)) − 1` |
-| IBR | el margen | `(1 + (IBR_proy(T+h) + margen + δ)/12)^(365/30) − 1` |
+| IBR | el margen | entra en cada período: `(1 + (IBR_inicio + margen + δ)/12)^(−e_i)` |
 
 **A 90 y 180 días el delta pesa mucho; al vencimiento casi nada.** No es un defecto: al
 usar `h = días − 1`, V₁ es el flujo final descontado un solo día, y a esa altura la tasa
@@ -750,7 +814,7 @@ de IBR, escenario Base:
 | 0 | 12,914 % | 13,073 % | 13,154 % |
 | +100 pb | 9,767 % | 12,005 % | 13,152 % |
 
-### Cinco invariantes, fijados en las pruebas
+### Seis invariantes, fijados en las pruebas
 
 1. Tasa fija al vencimiento con δ = 0 devuelve **exactamente su propia TIR**.
 2. El escenario **no mueve ni un decimal** en tasa fija, en ninguno de los tres
@@ -761,19 +825,28 @@ de IBR, escenario Base:
    la senda; si no, V₀ y los flujos que se cobran quedan armados con inflaciones
    distintas — es lo que se ve en la tabla de más arriba.
 
-   **En IBR la prueba solo exige la igualdad al vencimiento**, y es a propósito: la
-   entrada descuenta a la «Tasa (T)» del proveedor y la salida se rearma desde el margen
-   con la conversión 365/30, así que a 90 y 180 días queda la brecha medida en el bloque
-   de IBR —de 56 a 190 pb según el plazo— aunque nada se mueva. Si algún día se decide
-   cerrarla, esta prueba es la que hay que endurecer.
+   **En IBR la igualdad es aproximada**, y la prueba lo dice así: con todo plano y la
+   TIR coherente con el margen —la que hace que el atajo devuelva ese mismo margen— el
+   HPR queda a 14 pb o menos de la tasa de entrada en los tres horizontes, y exacto al
+   vencimiento. Lo que resta es el 30/360 del precio contra el ACT/365 del XIRR, y se
+   cerrará cuando V₀ también se arme por el método de la bvc. Ojo con la referencia:
+   contra una TIR que no sea la coherente con el margen, la diferencia es rentabilidad
+   legítima y no residuo.
 4. En IPC, la **tasa de entrada es la TIR del nodo** para cualquier IPC que se escriba en
    la barra, porque el mismo valor despeja el margen y lo recompone. V₀ sí se mueve al
    cambiar ese IPC —entra en los cupones del segundo en adelante—, pero la tasa a la que
    se descuenta no.
 5. **V₀ es el mismo en los tres escenarios**, en IPC y en IBR: la senda no interviene en
    el precio de entrada, que se arma con el IPC de la barra o con la curva forward
-   `IND_IBR`. Y en los dos el escenario **alcista rinde más**, porque la subida no
-   encarece la entrada y sí levanta los cupones cobrados y el valor de venta.
+   `IND_IBR`. Y en los dos el escenario **alcista rinde más**. La magnitud, eso sí, no se
+   parece: en IPC el escenario mueve cientos de puntos básicos, y en IBR apenas unos
+   pocos a 90 días, porque un flotante está construido para que el nivel del índice no
+   mueva su precio. Ver «El escenario casi no mueve el HPR de IBR».
+
+6. En IBR, **el cupón de cada período y su tasa de descuento usan el mismo índice**. Se
+   fija con la prueba de par: un flotante cuyo margen iguala a su cupón facial vale
+   exactamente capital más corrido, con cualquier senda. Es lo que garantiza que el
+   precio no dependa del nivel del índice.
 
 ### Dos advertencias que el reporte muestra
 
@@ -786,11 +859,10 @@ mientras la rejilla de esos bloques cubre tres años. Las fechas que se salen ar
 último dato publicado y llevan un asterisco. A 90 y 180 días no hay extrapolación en
 ninguna fila; solo afecta a los plazos largos de la tabla al vencimiento.
 
-**En IBR, la tasa de entrada sí es la columna «Tasa (T)»** de la otra pestaña, tal cual;
-la que no coincide con ella es la **tasa de venta**, recompuesta desde el margen del atajo
-y separada unos 21 pb de la de entrada aunque el mercado no se mueva. Esa distancia es la
-brecha documentada en el bloque de IBR. En IPC y en tasa fija las dos tasas coinciden
-exactamente.
+**En IBR no hay una «tasa de venta» que mostrar.** La de entrada sí es la columna
+«Tasa (T)» de la otra pestaña, tal cual; la salida no es una tasa sino un precio armado
+período a período con el margen del atajo y la senda del escenario. En IPC y en tasa fija
+sigue habiendo una sola tasa de salida y coincide con la de entrada cuando δ = 0.
 
 ## Tasa y margen, en columnas aparte
 
@@ -1078,7 +1150,7 @@ donde el corte no cambió.
 | Corte de los bloques | ventanas mensuales de vencimiento, con la ventana de fechas en la primera columna |
 | Rentabilidades esperadas | solo CDT; tres tipos, tres escenarios, delta libre en pb |
 | Valoración del CDT sintético de IPC | vence en el borde de su ventana; cupón trimestral `[(1+cupón T)(1+IPC)]^(1/4)−1` con el IPC de tres meses antes de cada pago; **V₀ con la convención del proveedor** —solo el primer cupón usa el índice que se le fijó, los demás el IPC de la barra— descontado a la TIR del nodo; cupones cobrados y V₁ proyectados con la senda del escenario; venta a `(1+margen real+δ)(1+IPC esperado en la fecha de salida)−1` |
-| Valoración del CDT sintético de IBR | vence el último día de su ventana; cupón mensual `(IBR + cupón T)/12` con el IBR de un mes antes de cada pago; **V₀ con la convención del proveedor** —el primer cupón de `IB1.xlsx`, los demás de la curva forward `IND_IBR` del día hábil anterior— descontado a la «Tasa (T)» del rango tal cual; cupones cobrados y V₁ proyectados con la senda del escenario; venta a una sola tasa, `margen + δ + IBR esperado en T+h` nominal mes vencido llevada a efectiva anual con el exponente **365/30** |
+| Valoración del CDT sintético de IBR | vence el último día de su ventana; cupón mensual `(IBR + cupón T)/12` con el IBR de un mes antes de cada pago; **V₀ con la convención del proveedor** —el primer cupón de `IB1.xlsx`, los demás de la curva forward `IND_IBR` del día hábil anterior— descontado a la «Tasa (T)» del rango tal cual; cupones cobrados y V₁ proyectados con la senda del escenario; **V₁ por el método de la Calculadora IBR de la bvc**: una tasa por período, `(IBR que fijó ese cupón + margen del atajo + δ)/12`, base 30/360, con el exponente `L/K` solo en el primer período |
 | Horizonte | 7 años en tasa fija, 3 en IPC y en IBR |
 | Contenido del nodo | promedio de todos los títulos que vencen en la ventana |
 | Muestra por nodo | se incluye (`n T-1`, `n T`) con nota al pie si algún nodo queda corto |
@@ -1181,14 +1253,12 @@ dividía por cero.
    contra 1,71 en precio). La duración es poco sensible: 4,162 contra 4,143 años.
 6. **`Call Implicitas`** estaba comentado en el VBA. Si era un paso faltante, hay que
    especificarlo.
-7. **La brecha entre la tasa de entrada y la de salida en IBR.** La entrada descuenta a
-   la «Tasa (T)» que envía el proveedor y la salida rearma su tasa desde el margen con la
-   conversión 365/30: son dos números distintos —unos 21 pb— aunque el mercado no se
-   mueva. Con la curva, la senda y el histórico los tres planos, el HPR queda entre 56 y
-   190 pb por debajo de la TIR del nodo a 90 días según el plazo, entre 19 y 87 pb a 180
-   días, y coincide al vencimiento. Está medido en «Una brecha sistemática entre la
-   entrada y la salida», con las tres alternativas de solución que se han considerado.
-   Ninguna se ha elegido: hoy corre la primera, que es dejarlo como está.
+7. **V₀ de IBR todavía no usa el método de la bvc.** V₁ ya descuenta período a período
+   en 30/360; V₀ sigue en ACT/365 a la «Tasa (T)» del proveedor. De ahí el residuo de 14
+   pb o menos que queda entre el HPR y la tasa de entrada con todo plano. Alinearlo se
+   aplazó a propósito porque cambia el precio de entrada, que es la cifra que se concilia
+   contra el proveedor. Está medido en «Lo que queda de brecha entre la entrada y la
+   salida».
 8. **Las rentabilidades esperadas de IPC e IBR están en confirmación.** Las convenciones
    de las dos secciones anteriores son las acordadas hasta hoy y pueden ajustarse; el
    README es el sitio donde queda constancia de cuál rige en cada momento.
