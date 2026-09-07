@@ -23,10 +23,11 @@ de la ventana. No se promedia ni se interpola entre rangos.
     descuenta con la suya. Ver `DESCUENTO_POR_FLUJO`. La suma IBR + margen es nominal
     mes vencido, y por eso se recompone antes de aplicarla en base ACT/365.
   - **V₀**: los cupones descontados con la tasa recompuesta con el índice de hoy.
-    Los cupones se proyectan con la **senda del escenario elegido** —cada uno lee el
-    índice al inicio de su período, también más allá de la valoración—, así que V₀
-    cambia con el escenario en los dos bloques indexados: el precio de entrada
-    incorpora la expectativa.
+    Cómo se proyectan esos cupones depende del bloque, ver `V0_INDICE_PEGADO`:
+    en **IPC** rige la convención de los proveedores de precios —solo el primer cupón
+    usa el índice que se le fijó, y los demás el índice de hoy «pegado»—, así que V₀
+    sale igual en los tres escenarios; en **IBR** cada cupón lee la senda del
+    escenario al inicio de su período, así que V₀ cambia con el escenario.
   - **V₁** en el día h: los flujos posteriores, proyectados con el escenario y
     descontados desde h con la tasa recompuesta usando el índice proyectado en
     T+h y el margen desplazado por el delta.
@@ -151,7 +152,8 @@ def fecha_del_indice(fecha_cupon: dt.date, paso: int) -> dt.date:
 def _flujos(tipo: str, fechas: list[dt.date], vencimiento: dt.date,
             fecha_val: dt.date, cupon_facial: float, escenarios: Escenarios | None,
             escenario: str,
-            historico: dict[dt.date, float] | None = None
+            historico: dict[dt.date, float] | None = None,
+            indice_pegado: float | None = None
             ) -> tuple[list[tuple[dt.date, float]], bool]:
     """Flujos del título, proyectados con la senda del escenario.
 
@@ -160,6 +162,11 @@ def _flujos(tipo: str, fechas: list[dt.date], vencimiento: dt.date,
     datos publicados, y es la misma fuente contra la que se calcula el margen. Si al
     histórico le falta ese día se cae a la senda de proyección, para no dejar el
     rango sin cifra.
+
+    `indice_pegado` arma en cambio los flujos del **precio de entrada**: las lecturas
+    posteriores a la valoración no se buscan en la senda sino que toman ese valor
+    fijo, el índice de hoy. Las anteriores siguen siendo el dato publicado que se les
+    fijó. Es la convención de los proveedores de precios.
     """
     pagos = PAGOS_POR_ANIO[tipo]
     paso = 12 // pagos
@@ -173,6 +180,8 @@ def _flujos(tipo: str, fechas: list[dt.date], vencimiento: dt.date,
             publicado = (historico or {}).get(inicio) if inicio <= fecha_val else None
             if publicado is not None:
                 indice = publicado
+            elif indice_pegado is not None and inicio > fecha_val:
+                indice = indice_pegado
             else:
                 indice, ex = senda.vigente(inicio, escenario)
                 extrapolado = extrapolado or ex
@@ -188,6 +197,14 @@ def _flujos(tipo: str, fechas: list[dt.date], vencimiento: dt.date,
 # paga el 27 de octubre se trae a hoy con el IBR que la senda proyecta para el 27 de
 # octubre, más el margen. En IPC y en tasa fija la tasa de descuento es única.
 DESCUENTO_POR_FLUJO = frozenset({"ibr"})
+
+# Tipos cuyo **precio de entrada** se arma con la convención de los proveedores de
+# precios colombianos: solo el primer cupón usa el índice que se le fijó —tres meses
+# antes de su pago, una fecha ya pasada y por tanto publicada— y todos los demás usan
+# el índice de hoy, «pegado». La senda del escenario no interviene en V₀, así que el
+# precio de entrada sale igual en los tres escenarios: lo que se paga hoy no depende
+# de la expectativa propia. La salida sí proyecta con la senda.
+V0_INDICE_PEGADO = frozenset({"ipc"})
 
 
 def _tasas(tipo: str, fechas: list[dt.date], *, tir: float, margen: float,
@@ -242,11 +259,17 @@ def calcular(*, tipo: str, fecha_val: dt.date, vencimiento: dt.date, tir: float,
 
     con_escenario, ex_esc = _flujos(tipo, fechas, vencimiento, fecha_val,
                                     cupon_facial, escenarios, escenario, historico)
+    if tipo in V0_INDICE_PEGADO:
+        flujos_v0, _ = _flujos(tipo, fechas, vencimiento, fecha_val, cupon_facial,
+                               escenarios, escenario, historico,
+                               indice_pegado=indice_hoy)
+    else:
+        flujos_v0 = con_escenario
 
     tasas_ent, ex_ent = _tasas(tipo, fechas, tir=tir, margen=margen, senda=senda,
                                escenario=escenario, indice_unico=indice_hoy)
     tasa_ent = tasa_descuento(tipo, tir, margen, indice_hoy)
-    v0 = 100 * _valor_presente(con_escenario, fecha_val, tasas_ent)
+    v0 = 100 * _valor_presente(flujos_v0, fecha_val, tasas_ent)
 
     delta = delta_pb / 10000.0
     fuera = []

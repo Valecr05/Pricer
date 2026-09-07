@@ -24,7 +24,8 @@ import json
 
 from . import config as cfg
 from .config import DETAIL_LAYOUT, MarketParams
-from .hpr import DESCUENTO_POR_FLUJO, HORIZONTES, INDICE_DE, PAGOS_POR_ANIO
+from .hpr import (DESCUENTO_POR_FLUJO, HORIZONTES, INDICE_DE, PAGOS_POR_ANIO,
+                  V0_INDICE_PEGADO)
 
 
 def e(x) -> str:
@@ -493,21 +494,31 @@ function rentabilidad(D, opciones){
   // de la valoracion sale de la senda diaria publicada —la misma contra la que se
   // calcula el margen— y solo se cae a la de proyeccion si ese dia le falta.
   var publicado = opciones.historico || {};
-  var conEscenario = fechas.map(function(f){
-    var idx = 0;
-    if(senda){
-      var ini = fechaDelIndice(f, paso);
-      var dato = (ini <= T) ? publicado[ini] : undefined;
-      if(dato === undefined || dato === null){
-        var v = vigente(senda, ini, opciones.escenario);
-        idx = v[0]; extrap = extrap || v[1];
-      } else {
-        idx = dato;
+  // `pegado` arma los flujos del precio de entrada con la convencion de los
+  // proveedores de precios: lo posterior a la valoracion no se busca en la senda sino
+  // que toma el indice de hoy. Lo anterior sigue siendo el dato que se le fijo.
+  var construir = function(pegado){
+    return fechas.map(function(f){
+      var idx = 0;
+      if(senda){
+        var ini = fechaDelIndice(f, paso);
+        var dato = (ini <= T) ? publicado[ini] : undefined;
+        if(dato !== undefined && dato !== null){
+          idx = dato;
+        } else if(pegado !== null && ini > T){
+          idx = pegado;
+        } else {
+          var v = vigente(senda, ini, opciones.escenario);
+          idx = v[0]; extrap = extrap || v[1];
+        }
       }
-    }
-    var c = cuponPeriodo(tipo, opciones.cupon, idx, pagos);
-    return [f, c + (f === venc ? 1 : 0)];
-  });
+      var c = cuponPeriodo(tipo, opciones.cupon, idx, pagos);
+      return [f, c + (f === venc ? 1 : 0)];
+    });
+  };
+  var conEscenario = construir(null);
+  var flujosV0 = (D.hpr.v0IndicePegado || []).indexOf(tipo) >= 0
+                 ? construir(indiceHoy) : conEscenario;
 
   // Tasa de descuento de cada flujo. En los tipos de descuentoPorFlujo cada uno lee
   // el indice en su PROPIA fecha de pago —no al inicio de su periodo, que es la regla
@@ -536,7 +547,7 @@ function rentabilidad(D, opciones){
   };
 
   var tasaEnt = tasaDescuento(tipo, opciones.tir, opciones.margen, indiceHoy);
-  var V0 = 100 * vpres(conEscenario, T, tasas(fechas, opciones.tir, opciones.margen, indiceHoy));
+  var V0 = 100 * vpres(flujosV0, T, tasas(fechas, opciones.tir, opciones.margen, indiceHoy));
   var delta = opciones.deltaPb / 10000;
 
   // los horizontes fijos, y al final el vencimiento. En esa ultima fila se usa
@@ -1515,7 +1526,8 @@ def render(*, serie, seleccion: tuple[str, str], params: MarketParams,
                       escenarios.activo else None,
         "hpr": {"horizontes": list(HORIZONTES),
                 "pagos": dict(PAGOS_POR_ANIO), "indice": dict(INDICE_DE),
-                "descuentoPorFlujo": sorted(DESCUENTO_POR_FLUJO)},
+                "descuentoPorFlujo": sorted(DESCUENTO_POR_FLUJO),
+                "v0IndicePegado": sorted(V0_INDICE_PEGADO)},
         "generado": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "version": version,
         "tiempos": tiempos,
