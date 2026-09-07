@@ -39,7 +39,7 @@ from .loader import SXFormatError, read_sx
 from .transform import build_valuation
 
 # Subir esta versión invalida todos los resúmenes en caché.
-SUMMARY_VERSION = 10
+SUMMARY_VERSION = 11
 
 # Campos del catálogo de instrumentos: no cambian entre fechas, así que se guardan
 # una sola vez por ISIN en lugar de repetirse en cada resumen.
@@ -149,20 +149,28 @@ def resumir(path: str | Path, *, params: MarketParams,
     # valoración, así que es un dato publicado y sale de IB1.xlsx y no del archivo de
     # escenarios — la misma fuente contra la que se calcula el margen. En la práctica
     # todos los rangos comparten ese primer cupón, así que suele ser una sola fecha.
+    # Y la curva forward IND_IBR en las fechas en que la lee el precio de entrada: el
+    # cupón de cada período se fija al inicio del período, y los posteriores a la
+    # valoración salen de la curva del día hábil anterior. Como todos los rangos
+    # comparten el día del mes, son unas tres decenas de fechas.
     publicada: dict[str, float] = {}
+    curva_v0: dict[str, float] = {}
     if fuente_ibr is not None and fuente_ibr.historico:
+        curva = insumos_ibr[0] if insumos_ibr else {}
         for spec in cfg.BLOCKS:
             if not spec.margen_atajo:
                 continue
             pagos = PAGOS_POR_ANIO[spec.id]
+            paso = 12 // pagos
             for ancla in anclas_mensuales(fecha, spec.meses)[1:]:
                 venc = vencimiento_del_nodo(fecha, (ancla.date() - fecha).days)
-                cupones = calendario_cupones(venc, fecha, pagos)
-                if not cupones:
-                    continue
-                inicio = fecha_del_indice(cupones[0], 12 // pagos)
-                if inicio <= fecha and inicio in fuente_ibr.historico:
-                    publicada[inicio.isoformat()] = _n(fuente_ibr.historico[inicio])
+                for cupon in calendario_cupones(venc, fecha, pagos):
+                    inicio = fecha_del_indice(cupon, paso)
+                    if inicio <= fecha:
+                        if inicio in fuente_ibr.historico:
+                            publicada[inicio.isoformat()] = _n(fuente_ibr.historico[inicio])
+                    elif inicio in curva:
+                        curva_v0[inicio.isoformat()] = _n(curva[inicio])
 
     u = universo_tes(val.data).copy()
     u["grupo"] = _grupo_tes(u["nemotecnico"])
@@ -200,8 +208,10 @@ def resumir(path: str | Path, *, params: MarketParams,
             # el margen se calcula con la curva del día hábil anterior
             "curva_usada": (_fecha(fuente_ibr.fecha_curva_usada(fecha))
                             if fuente_ibr is not None else None),
-            # lecturas publicadas que necesita la pestaña de rentabilidades
+            # lecturas que necesita el precio de entrada de la pestaña de
+            # rentabilidades: lo ya publicado y la curva forward de lo que viene
             "historico": publicada,
+            "curva": curva_v0,
             "motivo": motivo_ibr,
         },
         "cinta": archivo.raw_primer_registro,

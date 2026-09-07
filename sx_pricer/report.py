@@ -24,8 +24,7 @@ import json
 
 from . import config as cfg
 from .config import DETAIL_LAYOUT, MarketParams
-from .hpr import (DESCUENTO_POR_FLUJO, HORIZONTES, INDICE_DE, PAGOS_POR_ANIO,
-                  V0_INDICE_PEGADO)
+from .hpr import HORIZONTES, INDICE_DE, PAGOS_POR_ANIO, PERIODOS_ANIO_IBR
 
 
 def e(x) -> str:
@@ -445,10 +444,13 @@ function fechaDelIndice(fechaCupon, paso){
   return menosMeses(fechaCupon, paso);
 }
 
-function tasaDescuento(tipo, tir, margen, indice){
+// En IBR la suma indice + margen es nominal mes vencido: se divide entre 12 para la
+// periodica y se lleva a efectiva anual con el exponente 365/30 —un anio de 365 dias
+// sobre un mes de 30—, no con 12.
+function tasaDescuento(tipo, tir, margen, indice, periodos){
   if(tipo === 'fs') return tir;
   if(tipo === 'ipc') return (1 + margen) * (1 + indice) - 1;
-  return Math.pow(1 + (indice + margen) / 12, 12) - 1;
+  return Math.pow(1 + (indice + margen) / 12, periodos) - 1;
 }
 
 function xirr(flujos){
@@ -494,10 +496,12 @@ function rentabilidad(D, opciones){
   // de la valoracion sale de la senda diaria publicada —la misma contra la que se
   // calcula el margen— y solo se cae a la de proyeccion si ese dia le falta.
   var publicado = opciones.historico || {};
-  // `pegado` arma los flujos del precio de entrada con la convencion de los
-  // proveedores de precios: lo posterior a la valoracion no se busca en la senda sino
-  // que toma el indice de hoy. Lo anterior sigue siendo el dato que se le fijo.
-  var construir = function(pegado){
+  var curva = opciones.curva || {};
+  // `pegado` y `conCurva` arman los flujos del precio de entrada con la convencion de
+  // los proveedores de precios: lo posterior a la valoracion no se busca en la senda,
+  // sino que toma el indice de hoy —en IPC— o se lee en la curva forward IND_IBR del
+  // dia habil anterior —en IBR—. Lo anterior sigue siendo el dato que se le fijo.
+  var construir = function(pegado, conCurva){
     return fechas.map(function(f){
       var idx = 0;
       if(senda){
@@ -507,6 +511,8 @@ function rentabilidad(D, opciones){
           idx = dato;
         } else if(pegado !== null && ini > T){
           idx = pegado;
+        } else if(conCurva && ini > T && curva[ini] !== undefined && curva[ini] !== null){
+          idx = curva[ini];
         } else {
           var v = vigente(senda, ini, opciones.escenario);
           idx = v[0]; extrap = extrap || v[1];
@@ -516,38 +522,30 @@ function rentabilidad(D, opciones){
       return [f, c + (f === venc ? 1 : 0)];
     });
   };
-  var conEscenario = construir(null);
-  var flujosV0 = (D.hpr.v0IndicePegado || []).indexOf(tipo) >= 0
-                 ? construir(indiceHoy) : conEscenario;
+  var conEscenario = construir(null, false);
 
-  // Tasa de descuento de cada flujo. En los tipos de descuentoPorFlujo cada uno lee
-  // el indice en su PROPIA fecha de pago —no al inicio de su periodo, que es la regla
-  // de la tasa cupon— y con el se recompone su tasa. En los demas, una sola para todo.
-  var porFlujo = (D.hpr.descuentoPorFlujo || []).indexOf(tipo) >= 0 && senda;
-  var tasas = function(fechasFlujo, tirT, margenT, indiceUnico){
-    var out = {};
-    if(!porFlujo){
-      var unica = tasaDescuento(tipo, tirT, margenT, indiceUnico);
-      fechasFlujo.forEach(function(f){ out[f] = unica; });
-      return out;
-    }
-    fechasFlujo.forEach(function(f){
-      var v = vigente(senda, f, opciones.escenario);
-      extrap = extrap || v[1];
-      out[f] = tasaDescuento(tipo, tirT, margenT, v[0]);
-    });
-    return out;
-  };
-  var vpres = function(lista, desde, mapa){
+  var vpres = function(lista, desde, tasa){
     var s = 0;
     for(var i = 0; i < lista.length; i++){
-      s += lista[i][1] * Math.pow(1 + mapa[lista[i][0]], -diasEntre(desde, lista[i][0]) / 365);
+      s += lista[i][1] * Math.pow(1 + tasa, -diasEntre(desde, lista[i][0]) / 365);
     }
     return s;
   };
+  var periodos = D.hpr.periodosAnioIbr;
 
-  var tasaEnt = tasaDescuento(tipo, opciones.tir, opciones.margen, indiceHoy);
-  var V0 = 100 * vpres(flujosV0, T, tasas(fechas, opciones.tir, opciones.margen, indiceHoy));
+  // el precio de entrada: convencion del proveedor, distinta en cada indice
+  var flujosV0, tasaEnt;
+  if(tipo === 'ipc'){
+    flujosV0 = construir(indiceHoy, false);
+    tasaEnt = tasaDescuento(tipo, opciones.tir, opciones.margen, indiceHoy, periodos);
+  } else if(tipo === 'ibr'){
+    flujosV0 = construir(null, true);
+    tasaEnt = opciones.tir;            // la «Tasa (T)» del rango, ya efectiva anual
+  } else {
+    flujosV0 = conEscenario;
+    tasaEnt = tasaDescuento(tipo, opciones.tir, opciones.margen, indiceHoy, periodos);
+  }
+  var V0 = 100 * vpres(flujosV0, T, tasaEnt);
   var delta = opciones.deltaPb / 10000;
 
   // los horizontes fijos, y al final el vencimiento. En esa ultima fila se usa
@@ -560,14 +558,12 @@ function rentabilidad(D, opciones){
     var h = Math.min(pedido, diasVenc - 1);
     var salida = sumarDias(T, h);
     var vs = senda ? vigente(senda, salida, opciones.escenario) : [0, false];
-    var tasaSal = tasaDescuento(tipo, opciones.tir + delta, opciones.margen + delta, vs[0]);
+    var tasaSal = tasaDescuento(tipo, opciones.tir + delta, opciones.margen + delta,
+                                vs[0], periodos);
 
     var cupones = conEscenario.filter(function(x){ return x[0] > T && x[0] <= salida; });
     var resto = conEscenario.filter(function(x){ return x[0] > salida; });
-    // la venta usa la misma construccion que la entrada, con el margen desplazado
-    var V1 = 100 * vpres(resto, salida, tasas(resto.map(function(x){ return x[0]; }),
-                                              opciones.tir + delta, opciones.margen + delta,
-                                              vs[0]));
+    var V1 = 100 * vpres(resto, salida, tasaSal);
 
     var cf = [[0, -V0]];
     cupones.forEach(function(x){ cf.push([diasEntre(T, x[0]), 100 * x[1]]); });
@@ -1231,6 +1227,8 @@ function filasHpr(){
   var indiceEntrada = HPR.tipo === 'ipc' ? S.ipcT : null;
   // la senda diaria publicada de IBR, para las lecturas anteriores a la valoracion
   var publicada = HPR.tipo === 'ibr' ? ((rt().ibr || {}).historico || {}) : null;
+  // la curva forward IND_IBR del dia habil anterior, para los cupones de V0 en IBR
+  var curvaIbr = HPR.tipo === 'ibr' ? ((rt().ibr || {}).curva || {}) : null;
   var fuera = [], excluidas = [];
   filas.forEach(function(r){
     var m = margenDelNodo(HPR.tipo, r);
@@ -1241,7 +1239,8 @@ function filasHpr(){
     var res = SX.rentabilidad(D, {
       tipo: HPR.tipo, fechaVal: S.t, vencimiento: venc, tir: r.brutaT,
       cupon: r.cuponT / 100, margen: m, escenario: HPR.escenario,
-      deltaPb: HPR.delta, indiceEntrada: indiceEntrada, historico: publicada
+      deltaPb: HPR.delta, indiceEntrada: indiceEntrada, historico: publicada,
+      curva: curvaIbr
     });
     if(!res){ excluidas.push(r); return; }
     fuera.push({ fila: r, venc: venc, margen: m, res: res });
@@ -1526,8 +1525,7 @@ def render(*, serie, seleccion: tuple[str, str], params: MarketParams,
                       escenarios.activo else None,
         "hpr": {"horizontes": list(HORIZONTES),
                 "pagos": dict(PAGOS_POR_ANIO), "indice": dict(INDICE_DE),
-                "descuentoPorFlujo": sorted(DESCUENTO_POR_FLUJO),
-                "v0IndicePegado": sorted(V0_INDICE_PEGADO)},
+                "periodosAnioIbr": PERIODOS_ANIO_IBR},
         "generado": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "version": version,
         "tiempos": tiempos,

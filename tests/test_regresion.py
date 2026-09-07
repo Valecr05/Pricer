@@ -1247,15 +1247,13 @@ def test_hpr_controles_de_consistencia(valoraciones):
                 assert x.hpr == pytest.approx(x.tasa_entrada, abs=1e-9), (tipo, i)
 
 
-def test_v0_de_los_indexados_se_proyecta_con_el_escenario():
-    """Cada bloque indexado arma su precio de entrada a su manera.
+def test_v0_no_depende_del_escenario_en_ningun_bloque_indexado():
+    """El precio de entrada es el del proveedor: la senda no interviene en V₀.
 
-    En **IPC** rige la convención de los proveedores de precios: solo el primer cupón
-    usa el índice que se le fijó, y los demás el de hoy, «pegado». La senda no entra,
-    así que V₀ sale igual en los tres escenarios.
-
-    En **IBR** cada cupón lee la senda al inicio de su período, también más allá de la
-    valoración, así que V₀ cambia con el escenario.
+    En IPC porque los cupones posteriores al primero usan el índice de hoy «pegado»;
+    en IBR porque usan la curva forward IND_IBR. En los dos, el primer cupón usa el
+    índice que ya se le fijó. La salida sí proyecta con la senda, y de ahí sale toda
+    la diferencia entre escenarios.
     """
     import datetime as dtm
     from sx_pricer.escenarios import ESCENARIOS, Escenarios, Senda
@@ -1271,42 +1269,42 @@ def test_v0_de_los_indexados_se_proyecta_con_el_escenario():
     esc = Escenarios(sendas={
         "IPC": Senda("IPC", fechas, {e: senda(0.0614, p) for e, p in pasos.items()}),
         "IBR": Senda("IBR", fechas, {e: senda(0.1150, p) for e, p in pasos.items()})})
+    curva = {T + dtm.timedelta(days=k): 0.1150 for k in range(1, 1200)}
 
-    def calcular(tipo, escenario, escenarios=esc, **extra):
+    def calcular(tipo, escenario, escenarios=esc):
         kw = dict(tipo=tipo, fecha_val=T, vencimiento=venc, escenarios=escenarios,
-                  escenario=escenario, **extra)
+                  escenario=escenario)
         if tipo == "ipc":
             return H.calcular(tir=0.1107, cupon_facial=0.03, indice_entrada=0.0614,
                               margen=(1 + 0.1107) / 1.0614 - 1, **kw)
-        return H.calcular(tir=0.1280, cupon_facial=0.0130, margen=0.0130, **kw)
+        return H.calcular(tir=0.1280, cupon_facial=0.0130, margen=0.0130,
+                          curva=curva, **kw)
 
-    assert "ipc" in H.V0_INDICE_PEGADO and "ibr" not in H.V0_INDICE_PEGADO
+    for tipo in ("ipc", "ibr"):
+        v0 = {e: calcular(tipo, e)[0].v0 for e in ESCENARIOS}
+        assert len({round(v, 9) for v in v0.values()}) == 1, tipo
+        # y el alcista rinde más: la subida no encarece la entrada y sí levanta los
+        # cupones que se cobran y la venta
+        h = {e: calcular(tipo, e)[0].hpr for e in ESCENARIOS}
+        assert h["Alcista"] > h["Base"] > h["Bajista"], tipo
 
-    # IPC: el mismo precio de entrada en los tres escenarios
-    v0_ipc = {e: calcular("ipc", e)[0].v0 for e in ESCENARIOS}
-    assert len({round(v, 9) for v in v0_ipc.values()}) == 1
-    # y por eso el alcista rinde más: la subida no encarece la entrada, solo levanta
-    # los cupones que se cobran y la venta
-    hpr_ipc = {e: calcular("ipc", e)[0].hpr for e in ESCENARIOS}
-    assert hpr_ipc["Alcista"] > hpr_ipc["Base"] > hpr_ipc["Bajista"]
-
-    # IBR: V₀ sí cambia, y a la baja, porque su tasa de descuento sigue la senda y se
-    # lee en la fecha de pago —un mes después que el cupón—, así que sube más de lo
-    # que suben los cupones
-    v0_ibr = {e: calcular("ibr", e)[0].v0 for e in ESCENARIOS}
-    assert len({round(v, 9) for v in v0_ibr.values()}) == 3
-    assert v0_ibr["Alcista"] < v0_ibr["Base"] < v0_ibr["Bajista"]
-
-    # con la senda plana los tres vuelven a coincidir, y el HPR da la tasa de entrada
+    # Con la senda plana, el HPR devuelve la tasa de entrada en IPC, en los tres
+    # horizontes: entrada y salida usan la misma construcción.
+    #
+    # En IBR no, y no es un descuido. La entrada descuenta a la «Tasa (T)» del rango
+    # —efectiva anual, tal como la envía el proveedor— y la salida rearma su tasa
+    # desde el margen y el IBR con la conversión 365/30. Son dos números distintos
+    # para un mercado que no se movió, así que a 90 y 180 días queda una brecha
+    # sistemática. Al vencimiento desaparece, porque ahí V₁ es el flujo final
+    # descontado un solo día y la tasa de venta casi no pesa.
     plana = Escenarios(sendas={k: Senda(k, fechas, {e: [b] * len(fechas)
                                                     for e in ESCENARIOS})
                                for k, b in (("IPC", 0.0614), ("IBR", 0.1150))})
-    for tipo in ("ipc", "ibr"):
-        rs = {e: calcular(tipo, e, plana) for e in ESCENARIOS}
-        assert len({round(r[0].v0, 9) for r in rs.values()}) == 1, tipo
-        for r in rs.values():
-            for x in r:
-                assert x.hpr == pytest.approx(x.tasa_entrada, abs=1e-9), tipo
+    for r in (calcular("ipc", e, plana) for e in ESCENARIOS):
+        for x in r:
+            assert x.hpr == pytest.approx(x.tasa_entrada, abs=1e-9)
+    for r in (calcular("ibr", e, plana) for e in ESCENARIOS):
+        assert r[-1].hpr == pytest.approx(r[-1].tasa_entrada, abs=1e-4)
 
 
 def test_v0_de_ipc_usa_la_convencion_del_proveedor():
@@ -1354,48 +1352,57 @@ def test_v0_de_ipc_usa_la_convencion_del_proveedor():
         assert v0(ipc).tasa_entrada == pytest.approx(tir, abs=1e-12)
 
 
-def test_cada_flujo_de_ibr_se_descuenta_con_el_ibr_de_su_fecha():
-    """En IBR la tasa de descuento se lee en la fecha de pago del propio flujo.
+def test_v0_de_ibr_usa_la_curva_forward_y_descuenta_a_la_tasa_del_rango():
+    """El primer cupón sale de IB1; los demás, de la curva IND_IBR.
 
-    No al inicio de su período —esa es la regla de la tasa cupón—, y no una sola para
-    todo el título. `IBR + margen` es nominal mes vencido, así que se recompone antes
-    de aplicarla en base ACT/365.
+    Y todo se descuenta a la «Tasa (T)» del rango, tal cual: ya viene efectiva anual
+    del proveedor, así que la tasa de entrada **es** la TIR del nodo.
     """
     import datetime as dtm
     from sx_pricer.escenarios import Escenarios, Senda
     from sx_pricer import hpr as H
 
-    T = dtm.date(2026, 7, 28)
-    venc = dtm.date(2026, 9, 27)          # dos cupones mensuales
+    T, venc = dtm.date(2026, 7, 28), dtm.date(2026, 11, 27)
+    tir, cupon = 0.1280, 0.0130
     fechas = [dtm.date(2026, 4, 30) + dtm.timedelta(days=30 * k) for k in range(24)]
-    # senda que sube 10 pb al mes desde la valoración
-    valores = [0.1150 if f <= T else 0.1150 + 0.0010 * ((f - T).days / 30) for f in fechas]
-    esc = Escenarios(sendas={"IBR": Senda("IBR", fechas, {"Base": valores})})
-    sd = esc.senda("IBR")
-    cupon, margen = 0.0130, 0.0130
+    # la senda y la curva dicen cosas MUY distintas, para que se vea cuál se usó
+    esc = Escenarios(sendas={"IBR": Senda("IBR", fechas,
+                             {"Base": [0.1150] * len(fechas)})})
+    curva = {T + dtm.timedelta(days=k): 0.2000 for k in range(1, 400)}
+    publicada = {H.fecha_del_indice(H.calendario_cupones(venc, T, 12)[0], 1): 0.1153}
 
-    flujos = H.calendario_cupones(venc, T, 12)
-    assert flujos == [dtm.date(2026, 8, 27), dtm.date(2026, 9, 27)]
+    r = H.calcular(tipo="ibr", fecha_val=T, vencimiento=venc, tir=tir,
+                   cupon_facial=cupon, margen=0.0130, escenarios=esc,
+                   escenario="Base", historico=publicada, curva=curva)[0]
 
+    # reconstruido a mano: primer cupón de IB1, los demás de la curva, descuento al TIR
+    cupones = H.calendario_cupones(venc, T, 12)
     esperado = 0.0
-    for f in flujos:
-        ibr_cupon = sd.vigente(H.fecha_del_indice(f, 1), "Base")[0]   # inicio del período
-        ibr_desc = sd.vigente(f, "Base")[0]                           # fecha del pago
-        assert ibr_desc >= ibr_cupon                                  # la senda sube
-        flujo = (ibr_cupon + cupon) / 12 + (1.0 if f == venc else 0.0)
-        tasa = (1 + (ibr_desc + margen) / 12) ** 12 - 1               # nominal -> efectiva
-        esperado += flujo * (1 + tasa) ** (-((f - T).days) / 365)
+    for i, f in enumerate(cupones):
+        indice = publicada[H.fecha_del_indice(f, 1)] if i == 0 else curva[H.fecha_del_indice(f, 1)]
+        flujo = (indice + cupon) / 12 + (1.0 if f == venc else 0.0)
+        esperado += flujo * (1 + tir) ** (-((f - T).days) / 365)
+    assert r.v0 == pytest.approx(100 * esperado, abs=1e-12)
+    assert r.tasa_entrada == pytest.approx(tir, abs=1e-12)
 
-    r = H.calcular(tipo="ibr", fecha_val=T, vencimiento=venc, tir=0.1280,
-                   cupon_facial=cupon, margen=margen, escenarios=esc, escenario="Base")
-    assert r[0].v0 == pytest.approx(100 * esperado, abs=1e-12)
+    # sin curva, los cupones caerían en la senda y el precio sería otro
+    sin = H.calcular(tipo="ibr", fecha_val=T, vencimiento=venc, tir=tir,
+                     cupon_facial=cupon, margen=0.0130, escenarios=esc,
+                     escenario="Base", historico=publicada)[0]
+    assert sin.v0 != pytest.approx(r.v0)
 
-    # y con una sola tasa para todos los flujos daría otra cosa
-    unica = (1 + (sd.vigente(T, "Base")[0] + margen) / 12) ** 12 - 1
-    plano = sum(((sd.vigente(H.fecha_del_indice(f, 1), "Base")[0] + cupon) / 12
-                 + (1.0 if f == venc else 0.0)) * (1 + unica) ** (-((f - T).days) / 365)
-                for f in flujos)
-    assert r[0].v0 != pytest.approx(100 * plano)
+
+def test_la_tasa_de_venta_de_ibr_se_anualiza_con_365_sobre_30():
+    """`IBR + margen` es nominal mes vencido: periódica /12, y de ahí a E.A. con 365/30."""
+    from sx_pricer.hpr import PERIODOS_ANIO_IBR, tasa_descuento
+
+    assert PERIODOS_ANIO_IBR == pytest.approx(365 / 30)
+    nominal = 0.1150 + 0.0130
+    ea = tasa_descuento("ibr", 0.13, 0.0130, 0.1150)
+    assert ea == pytest.approx((1 + nominal / 12) ** (365 / 30) - 1)
+    # no es la convención de doce períodos: son unos 20 pb más
+    doce = (1 + nominal / 12) ** 12 - 1
+    assert ea > doce and (ea - doce) * 1e4 == pytest.approx(20.1, abs=0.5)
 
 
 def test_lo_pasado_sale_de_la_senda_publicada():
