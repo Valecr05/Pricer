@@ -14,13 +14,14 @@ de la ventana. No se promedia ni se interpola entre rangos.
     En los dos índices la tasa se lee al **inicio del período** y no en su pago: un
     cupón trimestral del 25 de agosto de 2026 usa el IPC de mayo de 2026, y uno
     mensual del 27 de agosto usa el IBR del 27 de julio.
-  - **Tasa de descuento**: una sola por bloque, nunca una por flujo.
-        TF    TIR(T)
-        IPC   (1 + margen) × (1 + IPC) − 1
-        IBR   (1 + (IBR + margen) / 12)^(365/30) − 1
+  - **Tasa de descuento**: una sola por bloque, nunca una por flujo. La de salida es
+        TF    TIR(T) + delta
+        IPC   (1 + margen + delta) × (1 + IPC(T+h)) − 1
+        IBR   (1 + (IBR(T+h) + margen + delta) / 12)^(365/30) − 1
     En IBR la suma índice + margen es **nominal mes vencido**: se divide entre 12 para
     la periódica y se lleva a efectiva anual con el exponente 365/30 —un año de 365
-    días sobre un mes de 30—, no con 12.
+    días sobre un mes de 30—, no con 12. La de entrada no siempre es la misma cuenta:
+    ver el bullet de V₀.
   - **V₀**: convención de los proveedores de precios, distinta en cada índice. En los
     dos, el primer cupón usa el índice ya publicado y la senda de escenarios no
     interviene, así que V₀ sale igual en los tres escenarios. En **IPC** los demás
@@ -33,10 +34,15 @@ de la ventana. No se promedia ni se interpola entre rangos.
   - **HPR**: XIRR sobre −V₀ en el día 0, los cupones cobrados en sus días y +V₁ en
     el día h, en base ACT/365.
 
-Con la senda del índice plana y delta cero, el HPR devuelve exactamente la tasa de
-entrada. En IPC eso pide además que el índice de hoy —el de la barra— sea el mismo
-valor de esa senda plana: si no, V₀ y los flujos que se cobran quedan armados con
-inflaciones distintas y la diferencia aparece como rentabilidad.
+Con la senda del índice plana y delta cero, en IPC el HPR devuelve exactamente la tasa
+de entrada en los tres horizontes; eso pide además que el índice de hoy —el de la barra—
+sea el mismo valor de esa senda plana, porque si no, V₀ y los flujos que se cobran quedan
+armados con inflaciones distintas y la diferencia aparece como rentabilidad.
+
+En IBR la igualdad solo se cumple al vencimiento. La entrada descuenta a la Tasa (T) del
+proveedor y la salida rearma su tasa desde el margen con la conversión 365/30: son unos
+21 pb distintos aunque el mercado no se mueva, y la duración los amplifica a 90 y 180
+días. Está documentado en el README como pendiente de decisión.
 """
 from __future__ import annotations
 
