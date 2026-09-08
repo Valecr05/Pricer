@@ -240,6 +240,29 @@ if (salida.conEscenarios) {
   };
 }
 
+// --- botones de descarga a Excel: uno por tabla, y ninguno suelto ---
+salida.excel = {};
+for (const [clave, panel] of [['curvas', 'panel-curvas'], ['hpr', 'panel-hpr'],
+                              ['datos', 'panel-datos']]) {
+  const p = $(panel);
+  salida.excel[clave] = {
+    botones: p.querySelectorAll('button.xls').length,
+    tablas: p.querySelectorAll('.card table').length,
+    // cada boton tiene que estar dentro de una tarjeta que traiga tabla, y ser el
+    // ultimo hijo de la cabecera para quedar en la esquina
+    bienColocados: Array.from(p.querySelectorAll('button.xls')).filter((b) => {
+      const card = b.closest('.card');
+      return card && card.querySelector('table') &&
+             b.parentNode.classList.contains('card-hd') &&
+             b.parentNode.lastElementChild === b &&
+             (b.getAttribute('data-xls') || '').length > 0;
+    }).length
+  };
+}
+// nombres distintos: si dos tablas comparten nombre, los archivos se pisan
+salida.excel.nombres = Array.from(doc.querySelectorAll('button.xls'))
+  .map((b) => b.getAttribute('data-xls'));
+
 // --- barras de diferencia en las graficas de bloque ---
 salida.barras = {};
 for (const gid of ['ch-fs-CDT', 'ch-ipc-CDT', 'ch-ibr-CDT']) {

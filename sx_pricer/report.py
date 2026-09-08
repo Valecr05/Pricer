@@ -109,6 +109,17 @@ h3{font-size:14px;font-weight:700;letter-spacing:.01em;margin:0}
 .card-hd{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;padding:13px 18px;
   border-bottom:1px solid var(--regla-suave);background:var(--rosa-tenue)}
 .card-hd .meta{margin-left:auto;font-size:11px;color:var(--tenue);letter-spacing:.02em}
+/* El boton de descarga va siempre al extremo derecho de la cabecera. Si la tarjeta
+   trae `.meta`, esta ya empuja con margin-left:auto y el boton queda detras; si no,
+   el propio boton empuja. */
+.xls{margin-left:auto;appearance:none;background:var(--blanco);border:1px solid var(--regla);
+  border-radius:3px;font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--tenue);padding:4px 10px;cursor:pointer;
+  transition:background .12s,color .12s,border-color .12s}
+.card-hd .meta ~ .xls{margin-left:0}
+.xls:hover{background:var(--rosa-tenue);color:var(--tinta);border-color:var(--rosa-fuerte)}
+.xls:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+.xls[disabled]{opacity:.45;cursor:default}
 .toggle{display:inline-flex;border:1px solid var(--regla);border-radius:3px;overflow:hidden}
 .tg{appearance:none;background:var(--blanco);border:0;border-left:1px solid var(--regla);
   font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
@@ -259,6 +270,7 @@ noscript p{background:var(--av-fondo);border:1px solid var(--av-borde);border-ra
 @media print{
   body{background:#fff} .top,.barra{position:static} .tabs{display:none}
   .panel[hidden]{display:block}          /* al imprimir salen las dos pestañas */
+  .xls{display:none}                     /* un boton impreso no sirve de nada */
   .tw{overflow:visible;max-height:none}  /* sin scroll, la tabla se pagina completa */
   section,.card{break-inside:avoid} thead th{position:static}
   .card,.tile,.issue{box-shadow:none}
@@ -790,7 +802,8 @@ function renderBloques(){
         '<span class="pill n">' + esc(filtro) + '</span>' +
         (conmuta ? conmutador(gid, hayMargen, motivoMargen, serieDeBloque(b),
                               b.indexado ? 'Tasa' : 'TIR') : '') +
-        '<span class="meta">' + conDato + ' nodos con dato</span></div>' +
+        '<span class="meta">' + conDato + ' nodos con dato</span>' +
+        botonXls(b.label + ' ' + fam) + '</div>' +
         '<div class="chart" id="' + gid + '"></div>' + leyenda() +
         tablaBloque(filas, b) + '</div>';
     });
@@ -992,7 +1005,8 @@ function renderTes(){
   ];
   $('tes-card').innerHTML =
     '<div class="card-hd"><h3>Valoración observada por plazo</h3>' +
-    '<span class="meta">' + fmt(filas.length, 0) + ' referencias en las dos fechas</span></div>' +
+    '<span class="meta">' + fmt(filas.length, 0) + ' referencias en las dos fechas</span>' +
+    botonXls('TES por plazo') + '</div>' +
     '<div class="chart" id="ch-tes"></div>' +
     '<div class="leyenda">' + series.map(function(s){
       return '<span><i style="border-top-color:' + s.color + ';border-top-style:' +
@@ -1341,7 +1355,11 @@ function tablaHpr(datos, indice, titulo, subtitulo){
   }).join('');
   return '<div class="card"><div class="card-hd"><h3>' + esc(titulo) + '</h3>' +
     '<span class="pill n">' + esc(subtitulo) + '</span>' +
-    '<span class="meta">' + datos.filas.length + ' rangos</span></div>' +
+    '<span class="meta">' + datos.filas.length + ' rangos</span>' +
+    // el nombre de una hoja de Excel no pasa de 31 caracteres, asi que «Horizonte 90
+    // dias» entra como «90 dias»
+    botonXls('HPR ' + HPR.tipo.toUpperCase() + ' ' +
+             titulo.replace('Horizonte ', '') + ' ' + HPR.escenario) + '</div>' +
     '<div class="tw"><table><thead>' + cab + '</thead><tbody>' + cuerpo +
     '</tbody></table></div>' + notaHpr(datos, indice) + '</div>';
 }
@@ -1439,6 +1457,239 @@ function ajustarAlto(){
   document.documentElement.style.setProperty('--top-h', cabecera.offsetHeight + 'px');
 }
 
+// ---------- exportar una tabla a Excel ----------
+// Se escribe un .xlsx de verdad, no un CSV: el reporte usa coma decimal y punto de
+// miles, asi que un CSV solo abriria bien en un Excel con configuracion regional en
+// espaniol. Dentro del xlsx los numeros van con punto decimal —el formato lo fija el
+// estandar, no la maquina— y Excel los muestra segun la configuracion de cada quien.
+//
+// Un xlsx es un ZIP con XML dentro. No hay libreria que cargar: el reporte tiene que
+// seguir funcionando abierto desde el disco y sin red, asi que el ZIP se arma a mano.
+// Se guarda sin comprimir (metodo 0), que evita implementar deflate y solo cuesta
+// tamanio en un archivo que vive unos segundos.
+
+var CRC_TABLA = (function(){
+  var t = new Uint32Array(256);
+  for(var n = 0; n < 256; n++){
+    var c = n;
+    for(var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes){
+  var c = 0xFFFFFFFF;
+  for(var i = 0; i < bytes.length; i++) c = CRC_TABLA[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function utf8(s){ return new TextEncoder().encode(s); }
+
+// Fecha DOS fija (1-ene-2020). El estandar ZIP no admite ceros ahi, y la fecha real
+// del archivo no aporta nada.
+var ZIP_FECHA = 0x5021, ZIP_HORA = 0;
+
+function zip(archivos){
+  var piezas = [], central = [], desplazamiento = 0;
+  archivos.forEach(function(a){
+    var nombre = utf8(a.nombre), datos = a.datos, n = datos.length, crc = crc32(datos);
+    var lh = new Uint8Array(30 + nombre.length), v = new DataView(lh.buffer);
+    v.setUint32(0, 0x04034b50, true);
+    v.setUint16(4, 20, true);          // version necesaria
+    v.setUint16(6, 0x0800, true);      // bit 11: los nombres van en UTF-8
+    v.setUint16(8, 0, true);           // metodo 0: almacenado
+    v.setUint16(10, ZIP_HORA, true); v.setUint16(12, ZIP_FECHA, true);
+    v.setUint32(14, crc, true); v.setUint32(18, n, true); v.setUint32(22, n, true);
+    v.setUint16(26, nombre.length, true); v.setUint16(28, 0, true);
+    lh.set(nombre, 30);
+
+    var cd = new Uint8Array(46 + nombre.length), w = new DataView(cd.buffer);
+    w.setUint32(0, 0x02014b50, true);
+    w.setUint16(4, 20, true); w.setUint16(6, 20, true);
+    w.setUint16(8, 0x0800, true); w.setUint16(10, 0, true);
+    w.setUint16(12, ZIP_HORA, true); w.setUint16(14, ZIP_FECHA, true);
+    w.setUint32(16, crc, true); w.setUint32(20, n, true); w.setUint32(24, n, true);
+    w.setUint16(28, nombre.length, true);
+    w.setUint32(42, desplazamiento, true);
+    cd.set(nombre, 46);
+
+    piezas.push(lh, datos); central.push(cd);
+    desplazamiento += lh.length + n;
+  });
+  var largoCentral = central.reduce(function(a, c){ return a + c.length; }, 0);
+  var fin = new Uint8Array(22), f = new DataView(fin.buffer);
+  f.setUint32(0, 0x06054b50, true);
+  f.setUint16(8, archivos.length, true); f.setUint16(10, archivos.length, true);
+  f.setUint32(12, largoCentral, true); f.setUint32(16, desplazamiento, true);
+  return new Blob(piezas.concat(central, [fin]),
+                  { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+function xmlEsc(s){
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;');
+}
+function columna(i){                    // 0 -> A, 25 -> Z, 26 -> AA
+  var s = '';
+  for(i += 1; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s;
+  return s;
+}
+
+// Estilos: 0 general, 1 porcentaje con tres decimales, 2 negrita para los encabezados.
+var ESTILOS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+  '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+  '<numFmts count="1"><numFmt numFmtId="164" formatCode="0.000%"/></numFmts>' +
+  '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>' +
+  '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+  '<fills count="2"><fill><patternFill patternType="none"/></fill>' +
+  '<fill><patternFill patternType="gray125"/></fill></fills>' +
+  '<borders count="1"><border/></borders>' +
+  '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+  '<cellXfs count="3"><xf xfId="0"/>' +
+  '<xf xfId="0" numFmtId="164" applyNumberFormat="1"/>' +
+  '<xf xfId="0" fontId="1" applyFont="1"/></cellXfs>' +
+  '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+  '</styleSheet>';
+
+// `filas` es una matriz de celdas; cada celda es null, una cadena, o {n: numero,
+// pct: bool}. Las `cabeceras` primeras filas salen en negrita.
+function libro(hoja, filas, cabeceras){
+  // Ancho de columna a ojo, por el texto mas largo de cada una. Sin esto, las
+  // ventanas y los nemotecnicos salen cortados y hay que ensanchar a mano.
+  var anchos = [];
+  filas.forEach(function(fila){
+    fila.forEach(function(c, j){
+      // los numeros se guardan con toda su precision pero Excel los muestra
+      // formateados, asi que su ancho no depende del literal guardado
+      var largo = c === null || c === undefined ? 0
+                : (typeof c === 'object' ? 10 : String(c).length);
+      if(!(anchos[j] > largo)) anchos[j] = largo;
+    });
+  });
+  var cols = anchos.map(function(a, j){
+    return '<col min="' + (j + 1) + '" max="' + (j + 1) + '" width="' +
+           Math.min(40, Math.max(9, (a || 0) + 2)) + '" customWidth="1"/>';
+  }).join('');
+
+  var xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    (cols ? '<cols>' + cols + '</cols>' : '') + '<sheetData>';
+  filas.forEach(function(fila, i){
+    xml += '<row r="' + (i + 1) + '">';
+    fila.forEach(function(c, j){
+      if(c === null || c === undefined || c === '') return;
+      var ref = columna(j) + (i + 1);
+      if(typeof c === 'object'){
+        xml += '<c r="' + ref + '"' + (c.pct ? ' s="1"' : '') + '><v>' + c.n + '</v></c>';
+      } else {
+        xml += '<c r="' + ref + '" t="inlineStr"' + (i < cabeceras ? ' s="2"' : '') +
+               '><is><t xml:space="preserve">' + xmlEsc(c) + '</t></is></c>';
+      }
+    });
+    xml += '</row>';
+  });
+  xml += '</sheetData></worksheet>';
+
+  var nombreHoja = hoja.replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31) || 'Hoja1';
+  return zip([
+    { nombre: '[Content_Types].xml', datos: utf8(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      '</Types>') },
+    { nombre: '_rels/.rels', datos: utf8(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '</Relationships>') },
+    { nombre: 'xl/workbook.xml', datos: utf8(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<sheets><sheet name="' + xmlEsc(nombreHoja) + '" sheetId="1" r:id="rId1"/></sheets></workbook>') },
+    { nombre: 'xl/_rels/workbook.xml.rels', datos: utf8(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '</Relationships>') },
+    { nombre: 'xl/styles.xml', datos: utf8(ESTILOS) },
+    { nombre: 'xl/worksheets/sheet1.xml', datos: utf8(xml) }
+  ]);
+}
+
+// Deshace el formato del reporte: punto de miles, coma decimal, sufijo de porcentaje
+// y el signo de los delta. Devuelve null si el texto no es un numero, y entonces la
+// celda sale como texto —fechas, nemotecnicos, rangos—.
+function comoNumero(txt){
+  var s = txt.replace(/ /g, ' ').replace(/−/g, '-').trim();
+  var esPct = /%$/.test(s);
+  s = s.replace(/%/g, '').trim();
+  if(!/^[+-]?\d+(\.\d{3})*(,\d+)?$/.test(s)) return null;
+  var v = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+  if(!isFinite(v)) return null;
+  return { n: esPct ? v / 100 : v, pct: esPct };
+}
+
+// Lee la tabla tal como esta en pantalla. Va contra el DOM y no contra el modelo de
+// datos a proposito: asi lo que se descarga es exactamente lo que se ve —el par de
+// fechas, el escenario, el delta y el IPC que haya puestos en ese momento— y un
+// cambio en cualquier tabla no obliga a tocar el exportador.
+function leerTabla(tabla){
+  var filas = [], cabeceras = 0;
+  Array.prototype.forEach.call(tabla.rows, function(tr){
+    if(tr.parentNode.tagName === 'THEAD') cabeceras++;
+    var fila = [];
+    Array.prototype.forEach.call(tr.cells, function(td){
+      var copia = td.cloneNode(true);
+      // los adornos no son dato: la marca de extrapolacion, el «(al venc.)» y los
+      // titulos de los conmutadores
+      Array.prototype.forEach.call(copia.querySelectorAll('small,.extrap,button'),
+        function(x){ x.remove(); });
+      var txt = (copia.textContent || '').replace(/\s+/g, ' ').trim();
+      var celda = txt === '' || txt === SX.VACIO ? null : (comoNumero(txt) || txt);
+      fila.push(celda);
+      for(var k = 1; k < (td.colSpan || 1); k++) fila.push(null);
+    });
+    filas.push(fila);
+  });
+  return { filas: filas, cabeceras: cabeceras };
+}
+
+function descargar(blob, nombre){
+  var url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+function nombreArchivo(base){
+  return (base + ' ' + (S.t || '')).replace(/[\\/:*?"<>|]/g, '-')
+                                   .replace(/\s+/g, ' ').trim() + '.xlsx';
+}
+
+function botonXls(nombre){
+  return '<button type="button" class="xls" data-xls="' + esc(nombre) +
+         '" title="Descargar esta tabla en Excel">Excel</button>';
+}
+
+// Delegado en el documento: las tarjetas se vuelven a dibujar enteras cada vez que
+// cambia el estado, asi que enganchar el evento a cada boton se perderia al redibujar.
+function cablearDescargas(){
+  document.addEventListener('click', function(ev){
+    var b = ev.target.closest ? ev.target.closest('.xls') : null;
+    if(!b) return;
+    var tarjeta = b.closest('.card'), tabla = tarjeta && tarjeta.querySelector('table');
+    if(!tabla){ return; }
+    var nombre = b.getAttribute('data-xls') || 'tabla';
+    var t = leerTabla(tabla);
+    descargar(libro(nombre, t.filas, t.cabeceras), nombreArchivo(nombre));
+  });
+}
+
 function cablearPestanas(){
   TABS.forEach(function(t, i){
     var b = $(t.boton);
@@ -1509,6 +1760,7 @@ function iniciar(){
   $('ipc-t1').oninput = function(){ S.ipcT1 = leerNumero('ipc-t1', S.ipcT1); actualizar(); };
   $('br').oninput = function(){ S.br = leerNumero('br', S.br); renderPie(); };
   cablearPestanas();
+  cablearDescargas();
   ajustarAlto();
   var pedida = location.hash.slice(1);
   TABS.forEach(function(t, i){ if(t.hash === pedida) activa = i; });

@@ -1815,6 +1815,15 @@ def test_la_pestana_de_rentabilidades_funciona(reporte_completo):
         assert g["barras"] * 2 == g["puntos"], gid
     assert d["barrasTes"] == 0                        # en TES no se pidieron
 
+    # un boton de Excel por tabla, en la esquina de su tarjeta y con nombre propio
+    for clave, e in d["excel"].items():
+        if clave == "nombres":
+            continue
+        assert e["tablas"] > 0, clave
+        assert e["botones"] == e["tablas"], clave
+        assert e["bienColocados"] == e["botones"], clave
+    assert len(set(d["excel"]["nombres"])) == len(d["excel"]["nombres"])
+
     # el escenario no mueve la tasa fija; sí mueve IPC
     assert d["hprTFAlcista"] == tf["hpr90"]
     assert d["hprIPCBajista"] != d["hprIPCBase"]["hpr90"]
@@ -1994,3 +2003,59 @@ def test_encabezado_pegajoso_se_mide_contra_su_contenedor():
     assert "--top-h" not in tablas
     # al imprimir no hay scroll: el contenedor se suelta para que la tabla pagine
     assert ".tw{overflow:visible;max-height:none}" in CSS
+
+
+@pytest.mark.skipif(not JSDOM, reason="jsdom no instalado (npm install jsdom)")
+def test_el_boton_de_excel_produce_un_xlsx_que_abre_sin_avisos(tmp_path):
+    """El reporte escribe un .xlsx de verdad, sin librerías y sin red.
+
+    Un CSV solo abriría bien en un Excel con la configuración regional en español,
+    porque el reporte usa coma decimal y punto de miles. Dentro del xlsx los números
+    van con punto decimal —lo fija el estándar, no la máquina— y Excel los muestra
+    según la configuración de cada quien.
+
+    Se comprueba sobre una tabla con todo lo que el lector tiene que saber deshacer:
+    cabecera de grupos con `colspan`, porcentajes, punto de miles, negativos, el punto
+    medio de «sin dato», la marca de extrapolación, el «(al venc.)» y texto con
+    caracteres que hay que escapar en XML.
+    """
+    import subprocess
+    import warnings
+    import zipfile
+
+    import openpyxl
+
+    destino = tmp_path / "salida.xlsx"
+    salida = subprocess.run([NODE, str(RAIZ / "tests" / "verificar_xls.js"), str(destino)],
+                            cwd=RAIZ, capture_output=True, text=True, check=True)
+    assert json.loads(salida.stdout)["nombre"] == "IPC CDT 2026-07-28.xlsx"
+
+    with zipfile.ZipFile(destino) as z:
+        assert z.testzip() is None                      # el ZIP hecho a mano es válido
+        assert "xl/worksheets/sheet1.xml" in z.namelist()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")                  # openpyxl no debe tener nada que decir
+        hoja = openpyxl.load_workbook(destino).worksheets[0]
+
+    assert hoja.title == "IPC CDT"      # el nombre lo pone `data-xls`, no el <h3>
+    filas = [[c.value for c in f] for f in hoja.iter_rows()]
+    assert filas[0] == ["Ventana", None, "Tasa", None]  # el colspan deja el hueco
+    assert filas[1] == ["Desde", "Hasta", "T-1", "T"]
+    # los porcentajes entran como fracción y con formato de porcentaje, no como texto
+    assert filas[2][2] == pytest.approx(0.11070)
+    assert hoja.cell(3, 3).number_format == "0.000%"
+    # «·» es una celda vacía, no la cadena «·»
+    assert filas[3][2] is None
+    # la marca de extrapolación y el «(al venc.)» son adorno, no dato
+    assert filas[3][3] == pytest.approx(0.12800)
+    assert filas[4][3] == pytest.approx(-0.00500)
+    # punto de miles deshecho, delta sin su signo, y el cero que no se pierde
+    assert filas[4][2] == pytest.approx(1234.567)
+    assert filas[5][2] == pytest.approx(12.3)
+    assert filas[4][1] == "2026-11-27"
+    # lo que no es número queda como texto, con el XML bien escapado
+    assert [c.value for c in hoja[6]] == ["TFIT16<240724>", '"comillas" & ampersand', 12.3, 0]
+    # las dos filas de encabezado van en negrita y las de datos no
+    assert hoja.cell(1, 1).font.bold and hoja.cell(2, 1).font.bold
+    assert not hoja.cell(3, 1).font.bold

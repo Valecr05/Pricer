@@ -1157,6 +1157,57 @@ funciona. Se cambia con el ratón o con las flechas del teclado.
 
 Al **imprimir** salen las dos pestañas, no solo la visible.
 
+### Descargar una tabla a Excel
+
+Cada tarjeta con tabla lleva un botón **Excel** en la esquina superior derecha de su
+cabecera. Descarga **esa** tabla, tal como está en pantalla: con el par de fechas, el
+IPC de la barra, el escenario y el delta que haya puestos en ese momento.
+
+El archivo se llama como la tabla, más la fecha T:
+
+```
+Tasa fija CDT 2026-07-28.xlsx
+Indexado a IBR (IB1) CDT HY 2026-07-28.xlsx
+HPR IBR 90 días Alcista 2026-07-28.xlsx
+HPR IPC Al vencimiento Base 2026-07-28.xlsx
+TES por plazo 2026-07-28.xlsx
+```
+
+Ese mismo nombre, sin la fecha, es el de la hoja dentro del libro. Excel no admite más
+de 31 caracteres ahí, y el más largo de los que salen mide 30.
+
+Es un **`.xlsx` de verdad**, no un CSV. La diferencia importa: el reporte escribe con
+coma decimal y punto de miles, así que un CSV solo abriría bien en un Excel configurado
+en español. Dentro del xlsx los números van con punto decimal —lo fija el estándar, no
+la máquina— y Excel los muestra según la configuración de cada quien.
+
+Qué llega y cómo:
+
+| En pantalla | En Excel |
+|---|---|
+| `11,070 %` | el número `0,1107` con formato de porcentaje — se puede multiplicar |
+| `1.234,567` | el número `1234,567` |
+| `+12,3` (Δ pb) | el número `12,3` |
+| `·` (sin dato) | celda vacía, no la cadena «·» |
+| `12,800 %*` | `0,128`; el asterisco de extrapolación es adorno y no viaja |
+| `11,3 %(al venc.)` | `0,113`; la etiqueta tampoco viaja |
+| `2026-07-27`, nemotécnicos, ISIN | texto |
+| cabeceras de grupo con `colspan` | la etiqueta en su primera columna y el resto en blanco |
+
+Las dos filas de encabezado salen en negrita y las columnas con su ancho ya puesto.
+
+**No hace falta instalar nada ni tener red.** Un `.xlsx` es un ZIP con XML dentro, y el
+reporte lo arma a mano: no carga ninguna librería, porque tiene que seguir funcionando
+abierto desde el disco. El ZIP se guarda sin comprimir, lo que evita implementar
+`deflate` y solo cuesta tamaño en un archivo que vive unos segundos.
+
+El exportador lee del **DOM y no del modelo de datos**, a propósito: así lo que se
+descarga es exactamente lo que se ve, y una columna nueva en cualquier tabla no obliga a
+tocarlo. La prueba `test_el_boton_de_excel_produce_un_xlsx_que_abre_sin_avisos` genera un
+archivo con jsdom y lo abre con openpyxl tratando cualquier aviso como error.
+
+Al imprimir, los botones no salen.
+
 ### Colores y tipografía
 
 Paleta rosada sobre crema: `#E58FB0` en la barra superior, `#FFB8D2` en la de
@@ -1451,7 +1502,10 @@ sx_pricer/
     cli.py          línea de comandos
 tests/
     test_regresion.py
-    verificar_js.js   corre la capa de cálculo del navegador para compararla
+    verificar_js.js    corre la capa de cálculo del navegador para compararla
+    verificar_hpr.js   la misma capa, sobre la pestaña de rentabilidades esperadas
+    verificar_dom.js   carga el reporte en un DOM real y lo interactúa
+    verificar_xls.js   ejercita el botón de Excel y escribe el .xlsx que produce
 params.json
 requirements.txt
 correr.bat              atajo para la corrida diaria en Windows (no se edita)
