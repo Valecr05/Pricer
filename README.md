@@ -495,18 +495,24 @@ de escenarios no interviene.
 **Para los cupones que se cobran y para V₁**, cada cupón lee el IBR de un mes antes de su
 pago **según la senda del escenario**. El primero sale igual en los tres, por ser pasado.
 
-Valorando el 28-jul-2026 un rango que vence el 27-jul-2027:
+Valorando el 28-jul-2026 un rango que vence el 27-jul-2027, con la curva `IND_IBR` plana
+en 11,50 % y una senda Alcista que sube 1,5 pb por mes desde ese mismo valor —el caso que
+se desarrolla entero más abajo—:
 
 | Cupón paga | Su IBR se fijó el | En V₀ usa | Cobrado o en V₁ (Alcista) |
 |---|---|---|---|
-| 27-ago-2026 | 27-jul-2026 | 11,5000 % *(IB1.xlsx)* | 11,5000 % — el mismo |
-| 27-sep-2026 | 27-ago-2026 | **11,5150 % *(curva IND_IBR)*** | 11,5033 % |
-| 27-oct-2026 | 27-sep-2026 | **11,5305 % *(curva IND_IBR)*** | 11,7033 % |
-| 27-nov-2026 | 27-oct-2026 | **11,5455 % *(curva IND_IBR)*** | 11,8033 % |
+| 27-ago-2026 | 27-jul-2026 | 11,5000 % *(IB1.xlsx)* | 11,5000 % — **el mismo** |
+| 27-sep-2026 | 27-ago-2026 | 11,5000 % *(curva IND_IBR)* | **11,5150 %** *(senda)* |
+| 27-oct-2026 | 27-sep-2026 | 11,5000 % *(curva IND_IBR)* | **11,5305 %** *(senda)* |
+| 27-nov-2026 | 27-oct-2026 | 11,5000 % *(curva IND_IBR)* | **11,5455 %** *(senda)* |
+
+El primer cupón sale igual en las dos columnas porque su fecha ya pasó: es un dato
+publicado, no una proyección. Del segundo en adelante las dos fuentes se separan, y ahí
+está toda la diferencia entre el precio de entrada y lo que de verdad ocurre.
 
 La tabla se corta en el cuarto cupón, pero la regla sigue igual hasta el vencimiento: en
 V₀ todos los pagos del segundo en adelante leen la curva `IND_IBR`, y en la salida todos
-leen la senda.
+leen la senda. La curva plana es una simplificación del ejemplo; la real tiene pendiente.
 
 Puesto en una línea de tiempo, con salida a 90 días:
 
@@ -586,15 +592,116 @@ sendas que se separan ±1,5 pb por mes desde ese mismo valor:
 | Base | 100,6816 | 10,497 % | 11,942 % | 12,797 % |
 | Bajista | 100,6816 | 10,481 % | 11,902 % | 12,707 % |
 
-| δ | HPR 90 d | 180 d | Al venc. |
-|---|---|---|---|
-| −50 pb | 12,075 % | 12,480 % | 12,799 % |
-| 0 | 10,497 % | 11,942 % | 12,797 % |
-| +100 pb | 7,409 % | 10,876 % | 12,795 % |
+Y moviendo el margen con el δ, en el escenario Base:
+
+| δ | margen | HPR 90 d | 180 d | Al venc. |
+|---|---|---|---|---|
+| −50 pb | 0,80 % | 12,075 % | 12,480 % | 12,799 % |
+| 0 | 1,30 % | 10,497 % | 11,942 % | 12,797 % |
+| +100 pb | 2,30 % | 7,409 % | 10,876 % | 12,795 % |
 
 Mismo V₀ en los tres escenarios, y el alcista sigue rindiendo más. Pero fíjese en la
-escala: **el escenario mueve 3 pb y el delta mueve 1.578 pb.** No es un error, y merece
-su propia sección.
+escala a 90 días: **cambiar de escenario mueve 3 pb, y 50 pb de margen mueven 158 pb.**
+En IBR la palanca es el margen, no el nivel del índice. No es un error, y merece su
+propia sección.
+
+#### Un ejemplo completo, número por número
+
+Todo lo anterior en un solo caso, con cada cifra intermedia, para poder rehacerlo en
+Excel. **Los datos de partida:**
+
+| | |
+|---|---|
+| Fecha de valoración `T` | 28-jul-2026 |
+| Vencimiento del nodo | 27-jul-2027 (el último día de su ventana) |
+| Tasa (T) del proveedor | 12,800 % |
+| Cupón facial del nodo | 1,300 % (spread sobre IBR) |
+| Margen del atajo de la bvc | 1,300 % |
+| Curva `IND_IBR` e histórico `IB1.xlsx` | planos en 11,500 % |
+| Senda del escenario | Alcista: 11,500 % subiendo 1,5 pb por mes |
+| Horizonte | 90 días → salida el 26-oct-2026 |
+| δ | 0 |
+
+El cronograma se cuenta hacia atrás desde el vencimiento: 12 cupones mensuales, todos
+el día 27, del 27-ago-2026 al 27-jul-2027.
+
+**Paso 1 · V₀, el precio de entrada.** No cambió con esta versión. Los cupones salen de
+la curva `IND_IBR` —plana en 11,50 %— y todo se descuenta a la Tasa (T), 12,80 %, en
+ACT/365:
+
+| # | paga | índice (curva) | flujo | días | factor `(1+12,80 %)^(−d/365)` | VP |
+|---|---|---|---|---|---|---|
+| 1 | 27-ago-26 | 11,5000 % | 1,06667 | 30 | 0,99014916 | 1,05616 |
+| 2 | 27-sep-26 | 11,5000 % | 1,06667 | 61 | 0,98007189 | 1,04541 |
+| 3 | 27-oct-26 | 11,5000 % | 1,06667 | 91 | 0,97041735 | 1,03511 |
+| ⋯ | | | | | | |
+| 12 | 27-jul-27 | 11,5000 % | 101,06667 | 364 | 0,88681741 | 89,62768 |
+
+El cupón sale de `(11,50 % + 1,30 %) / 12 = 1,06667`. **V₀ = 100,68162**, precio sucio.
+
+**Paso 2 · los cupones que se cobran.** Entre el 28-jul y el 26-oct caen dos, y estos sí
+leen la **senda del escenario**, no la curva:
+
+| paga | día | su índice se fijó el | índice (senda Alcista) | flujo |
+|---|---|---|---|---|
+| 27-ago-26 | 30 | 27-jul-26 | 11,5000 % *(ya publicado)* | 1,06667 |
+| 27-sep-26 | 61 | 27-ago-26 | 11,5150 % *(senda)* | 1,06792 |
+
+**Paso 3 · V₁, el precio de venta el 26-oct-2026.** Aquí está el método nuevo. Quedan 10
+flujos. Cada uno se descuenta con **el índice que fijó su propio cupón** más el margen,
+y el primero solo por la fracción de período que le falta:
+
+| # | paga `d_i` | su tasa se fijó el | `N_i` | `L_i` | `e_i` | flujo `Q_i` | factor `T_i` | acumulado `U_i` | `X_i` |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 27-oct-26 | 27-sep-26 | 11,5305 % | 1 | 0,0333 | 1,06921 | 0,999645552 | 0,999645552 | 1,06883 |
+| 2 | 27-nov-26 | 27-oct-26 | 11,5455 % | 31 | 1,0000 | 1,07046 | 0,989408791 | 0,989058097 | 1,05875 |
+| 3 | 27-dic-26 | 27-nov-26 | 11,5610 % | 61 | 1,0000 | 1,07175 | 0,989396147 | 0,978570270 | 1,04878 |
+| 4 | 27-ene-27 | 27-dic-26 | 11,5760 % | 91 | 1,0000 | 1,07300 | 0,989383911 | 0,968181681 | 1,03886 |
+| 5 | 27-feb-27 | 27-ene-27 | 11,5915 % | 121 | 1,0000 | 1,07429 | 0,989371267 | 0,957891136 | 1,02905 |
+| 6 | 27-mar-27 | 27-feb-27 | 11,6070 % | 151 | 1,0000 | 1,07558 | 0,989358624 | 0,947697856 | 1,01933 |
+| 7 | 27-abr-27 | 27-mar-27 | 11,6210 % | 181 | 1,0000 | 1,07675 | 0,989347204 | 0,937602224 | 1,00956 |
+| 8 | 27-may-27 | 27-abr-27 | 11,6365 % | 211 | 1,0000 | 1,07804 | 0,989334561 | 0,927602285 | 0,99999 |
+| 9 | 27-jun-27 | 27-may-27 | 11,6515 % | 241 | 1,0000 | 1,07929 | 0,989322327 | 0,917697651 | 0,99046 |
+| 10 | 27-jul-27 | 27-jun-27 | 11,6670 % | 271 | 1,0000 | 101,08058 | 0,989309684 | 0,907887173 | 91,76977 |
+
+**V₁ = Σ Xᵢ = 101,03338**
+
+Tres cosas que comprobar en esa tabla, porque son donde el método se rompe si se copia mal:
+
+- **`L_i` se mide en 30/360 desde la salida**, no en días reales. Del 26-oct-26 al
+  27-oct-26 hay 1; al 27-nov-26 hay 31, no 32.
+- **`e_1 = 1/30`** y todos los demás son 1. Aplicar `L/K` a todos los períodos es el
+  error más común, y aquí daría un precio muy distinto.
+- **`N_1 = 11,5305 %` es el índice del 27-sep-26**, un mes antes del pago — no el IBR del
+  día de la salida. El cupón que se paga el 27-oct ya tenía su tasa fijada un mes antes:
+  eso es la modalidad **previa**, y por eso el 27-oct-26 sale del período roto con la
+  tasa ya conocida.
+
+**Paso 4 · el HPR.** XIRR en base ACT/365 sobre:
+
+```
+  día  0    −100,68162     ← V₀
+  día 30      +1,06667     ← cupón del 27-ago-26
+  día 61      +1,06792     ← cupón del 27-sep-26
+  día 90    +101,03338     ← V₁
+
+  HPR = 10,5133 %
+```
+
+**Y ahora la pregunta para la que existe la pestaña:** si el margen se mueve, ¿qué pasa?
+Mismo caso, cambiando solo el δ:
+
+| margen | V₀ | V₁ a 90 d | HPR 90 d |
+|---|---|---|---|
+| 0,30 % *(δ = −100 pb)* | 100,68162 | 101,75010 | 13,6925 % |
+| 0,80 % *(δ = −50 pb)* | 100,68162 | 101,39101 | 12,0912 % |
+| **1,30 % *(δ = 0)*** | **100,68162** | **101,03338** | **10,5133 %** |
+| 1,80 % *(δ = +50 pb)* | 100,68162 | 100,67721 | 8,9584 % |
+| 2,30 % *(δ = +100 pb)* | 100,68162 | 100,32249 | 7,4264 % |
+
+**V₀ no se mueve** —el delta nunca toca la entrada— y todo el efecto pasa por V₁. Cada
+50 pb de margen valen unos 36 centavos de precio, que sobre 90 días son unos 155 pb de
+rentabilidad. La relación es casi perfectamente lineal en este rango.
 
 #### El escenario casi no mueve el HPR de IBR, y así debe ser
 
@@ -642,6 +749,60 @@ representar toda la senda. Atando los dos, el par sale solo. Por eso `_flujos` d
 el índice pegado a cada flujo, en vez de dejar que el cupón y el descuento lo lean por
 separado.
 
+#### Verificado contra el caso de referencia de la metodología
+
+El método de precio se validó contra un caso cerrado de la Calculadora IBR, y está fijado
+en las pruebas (`test_el_caso_dorado_de_la_metodologia_de_la_bvc`):
+
+| | |
+|---|---|
+| Fecha de valoración | 27-jun-2026 |
+| Emisión · vencimiento | 4-nov-2025 · 4-nov-2026 |
+| Spread de emisión | 0,75 % |
+| IBR previo (fijado en el último pago) | 10,568 % |
+| Margen | 0,83 % |
+| Curva IB1 | 4-jul 11,09784302 % · 4-ago 11,39034397 % · 4-sep 11,67108834 % · 4-oct 11,52857920 % |
+
+| # | paga | `N_i` | `Q_i` | `T_i` | `U_i` | `X_i` |
+|---|---|---|---|---|---|---|
+| 1 | 4-jul-26 | 10,56800000 % | 0,9431667 | 0,997796613 | 0,997796613 | 0,9410885 |
+| 2 | 4-ago-26 | 11,09784302 % | 0,9873203 | 0,990157959 | 0,987976258 | 0,9754490 |
+| 3 | 4-sep-26 | 11,39034397 % | 1,0116953 | 0,989919041 | 0,978016509 | 0,9894547 |
+| 4 | 4-oct-26 | 11,67108834 % | 1,0350907 | 0,989689833 | 0,967932996 | 1,0018984 |
+| 5 | 4-nov-26 | 11,52857920 % | 101,0232149 | 0,989806168 | 0,958066050 | 96,7869125 |
+
+**Precio sucio = 100,69480315.** El motor lo devuelve con una diferencia de 2,4e-9, que
+es ruido de coma flotante. Fíjese en el primer período: `L_1 = 7` días en 30/360 y por eso
+`e_1 = 7/30 = 0,2333`, mientras los cuatro siguientes van con exponente 1.
+
+La prueba comprueba además que **la senda de escenarios no interviene** en ese precio: se
+le pasa una senda absurda —99 %— y el resultado no cambia, porque el primer cupón sale del
+histórico y los demás de la curva.
+
+#### Cómo comprobar una fila del reporte a mano
+
+Con la pestaña abierta en un rango de IBR, para el horizonte de 90 días:
+
+1. **Anote los tres insumos del nodo**, de la pestaña de curvas: la Tasa (T), el cupón
+   facial y el margen del atajo.
+2. **Arme el cronograma** hacia atrás desde el último día de la ventana, en pasos de un
+   mes exactos. En Excel, `=FECHA.MES(vencimiento; -k)`.
+3. **La fecha de salida** es `T + 90` días naturales.
+4. **Para cada flujo posterior a la salida**, lea el IBR de la senda del escenario en
+   `FECHA.MES(fecha de pago; -1)` — un mes antes, mismo día. Ese número entra dos veces:
+   en el cupón, `=(IBR + cupón)/12*100`, y en el descuento.
+5. **`L_i` es `=DIAS360(salida; fecha de pago; FALSO)`**, con el argumento en FALSO, que
+   es el método US/NASD. El exponente es `(L_i − L_(i−1))/30`, y solo el primero es
+   distinto de 1.
+6. **Multiplique los factores** en cascada y sume `U_i × Q_i`: eso es V₁.
+7. **El HPR** es `=TIR.NO.PER` sobre `−V₀` hoy, los cupones cobrados en sus fechas y `+V₁`
+   en la fecha de salida.
+
+Si su número y el del reporte se separan, los tres sitios donde suele estar la diferencia
+son: haber puesto `DIAS360` en VERDADERO (método europeo), haber aplicado el exponente
+fraccionario a todos los períodos en vez de solo al primero, y haber leído el IBR en la
+fecha del pago en vez de un mes antes.
+
 #### Lo que queda de brecha entre la entrada y la salida
 
 V₀ descuenta a la «Tasa (T)» del proveedor en ACT/365 y V₁ se arma en 30/360: no son la
@@ -672,19 +833,25 @@ porque ahí V₁ es el flujo final descontado un solo día.
 Ese residuo se cerrará cuando **V₀ también se arme por este método**, que es el punto que
 quedó aplazado.
 
-#### Los dos bloques rinden más con el escenario alcista, por razones distintas
+#### Los dos bloques rinden más con el escenario alcista, pero no se parecen en cuánto
 
-Van en el mismo sentido, pero no por el mismo mecanismo, y conviene saberlo:
+Van en el mismo sentido y por eso es fácil creer que son comparables. No lo son:
 
-| | De dónde salen los cupones de V₀ | Efecto de un escenario alcista |
-|---|---|---|
-| **IPC** | el IPC de la barra, «pegado» | no encarece la entrada; solo levanta cupones cobrados y venta → **rinde más** |
-| **IBR** | la curva forward `IND_IBR` | igual: la entrada no se mueve, y suben los cupones cobrados y la venta → **rinde más** |
+| | De dónde salen los cupones de V₀ | Qué hace un escenario alcista | Cuánto mueve el HPR a 90 días |
+|---|---|---|---|
+| **IPC** | el IPC de la barra, «pegado» | levanta los cupones cobrados **y** el valor de venta, sin encarecer la entrada | **cientos de pb** |
+| **IBR** | la curva forward `IND_IBR` | levanta los cupones cobrados; en la venta, sube el cupón y sube el descuento y **se cancelan** | **unos pocos pb** |
 
-En los dos casos V₀ es el mismo en los tres escenarios, así que toda la diferencia del
-HPR viene de la salida. La distinción entre bloques ya no está en si la senda entra o no
-en el precio —no entra en ninguno—, sino en **de dónde sale la proyección de V₀**: un
-número escrito a mano en IPC, una curva de mercado en IBR.
+La diferencia está en cómo entra el índice en el precio de venta. En IPC el índice de la
+senda arma los cupones de V₁ y **solo un punto de la senda** —el de T+h— arma la tasa de
+descuento, así que una senda más alta sube el numerador mucho más que el denominador. En
+IBR el mismo índice hace las dos cosas en cada período, y por construcción se anulan: es
+lo que significa que un papel sea flotante.
+
+En los dos V₀ es el mismo en los tres escenarios. La distinción entre bloques ya no está
+en si la senda entra o no en el precio de entrada —no entra en ninguno—, sino en **de
+dónde sale la proyección de V₀** —un número escrito a mano en IPC, una curva de mercado
+en IBR— y en **cuánto puede mover el escenario la salida**.
 
 #### Lo que queda por confirmar en este bloque
 
@@ -795,24 +962,28 @@ cupones cobrados en sus días y `+V₁` en el día h, base ACT/365. Al vencimien
 
 ### El delta
 
-Siempre sobre la tasa de **salida**; la de entrada nunca se mueve.
+Siempre sobre la **salida**; la entrada nunca se mueve, así que **V₀ es idéntico con
+cualquier δ**.
 
-| Tipo | Qué desplaza | Tasa de salida |
+| Tipo | Qué desplaza | Dónde entra en la salida |
 |---|---|---|
-| Tasa fija | la TIR, porque no hay margen | `TIR(T) + δ` |
-| IPC | el margen | `(1 + margen + δ) × (1 + IPC_proy(T+h)) − 1` |
-| IBR | el margen | entra en cada período: `(1 + (IBR_inicio + margen + δ)/12)^(−e_i)` |
+| Tasa fija | la TIR, porque no hay margen | `TIR(T) + δ`, tasa única |
+| IPC | el margen | `(1 + margen + δ) × (1 + IPC_proy(T+h)) − 1`, tasa única |
+| IBR | el margen | en **cada período**: `(1 + (IBR que fijó ese cupón + margen + δ)/12)^(−e_i)` |
 
 **A 90 y 180 días el delta pesa mucho; al vencimiento casi nada.** No es un defecto: al
 usar `h = días − 1`, V₁ es el flujo final descontado un solo día, y a esa altura la tasa
-que exija el mercado es irrelevante porque al vencimiento pagan el par. Ventana jun-27
-de IBR, escenario Base:
+que exija el mercado es irrelevante porque al vencimiento pagan el par. El mismo caso del
+ejemplo completo —nodo que vence el 27-jul-2027, cupón y margen en 1,30 %, escenario
+Alcista—:
 
 | δ | 90 d | 180 d | vencimiento |
 |---|---|---|---|
-| −50 pb | 14,522 % | 13,611 % | 13,156 % |
-| 0 | 12,914 % | 13,073 % | 13,154 % |
-| +100 pb | 9,767 % | 12,005 % | 13,152 % |
+| −50 pb | 12,091 % | 12,520 % | 12,890 % |
+| 0 | 10,513 % | 11,983 % | 12,888 % |
+| +100 pb | 7,426 % | 10,917 % | 12,885 % |
+
+De −50 a +100 pb el HPR a 90 días recorre 466 pb, y al vencimiento medio punto básico.
 
 ### Seis invariantes, fijados en las pruebas
 
@@ -1100,7 +1271,7 @@ de 2026. Las pruebas de `tests/test_regresion.py` fijan estos números.
 | Duración calculada vs. la del proveedor en tasa fija | diferencia mediana de 3e-5 años, 0,005 en el percentil 99 |
 
 ```bash
-pytest -q          # 61 pruebas
+pytest -q          # 80 pruebas; 40 necesitan los planos SX y se saltan sin ellos
 ```
 
 Dos de ellas usan **node**, y se saltan si no está instalado:

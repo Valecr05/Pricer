@@ -1451,6 +1451,43 @@ def test_v1_de_ibr_descuenta_periodo_a_periodo_con_el_indice_de_cada_cupon():
         assert v1 == pytest.approx(par, abs=0.001), pendiente
 
 
+def test_el_caso_dorado_de_la_metodologia_de_la_bvc():
+    """El precio de referencia de la metodología, reproducido por el motor.
+
+    Es el caso con el que se validó el método contra la Calculadora IBR: título emitido
+    el 4-nov-2025 y con vencimiento el 4-nov-2026, spread 0,75 %, valorado el 27-jun-2026
+    con un margen de 0,83 % y cuatro puntos de curva. El precio sucio esperado es
+    100,69480315.
+
+    Comprueba de paso que la senda de escenarios **no interviene**: se le pasa una senda
+    absurda (99 %) y el precio no cambia, porque todas las lecturas salen del histórico
+    y de la curva.
+    """
+    from sx_pricer.escenarios import ESCENARIOS, Escenarios, Senda
+    from sx_pricer import hpr as H
+
+    t0, venc = dt.date(2026, 6, 27), dt.date(2026, 11, 4)
+    curva = {dt.date(2026, 7, 4): 0.1109784302, dt.date(2026, 8, 4): 0.1139034397,
+             dt.date(2026, 9, 4): 0.1167108834, dt.date(2026, 10, 4): 0.1152857920}
+    historico = {dt.date(2026, 6, 4): 0.10568}
+    fechas = [t0 + dt.timedelta(days=k) for k in range(0, 400, 7)]
+    esc = Escenarios(sendas={
+        "IBR": Senda("IBR", fechas, {e: [0.99] * len(fechas) for e in ESCENARIOS}),
+        "IPC": Senda("IPC", fechas, {e: [0.06] * len(fechas) for e in ESCENARIOS})})
+
+    cal = H.calendario_cupones(venc, t0, 12)
+    assert [f.isoformat() for f in cal] == ["2026-07-04", "2026-08-04", "2026-09-04",
+                                            "2026-10-04", "2026-11-04"]
+    flujos, _ = H._flujos("ibr", cal, venc, t0, 0.0075, esc, "Base", historico,
+                          curva=curva)
+    # el primer cupón lee el histórico —su período ya había empezado— y los demás la curva
+    assert [round(n, 10) for _, _, n in flujos] == [
+        0.10568, 0.1109784302, 0.1139034397, 0.1167108834, 0.1152857920]
+
+    precio = 100 * H._valor_presente_previa(flujos, t0, 0.0083)
+    assert precio == pytest.approx(100.69480315, abs=1e-7)
+
+
 def test_el_primer_periodo_de_v1_se_descuenta_solo_por_lo_que_le_falta():
     """El exponente `L/K` va únicamente en el primer período, medido en 30/360.
 
