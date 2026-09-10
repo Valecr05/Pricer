@@ -1,0 +1,4 @@
+# Los .bat los ejecuta cmd.exe, que posiciona el `goto` por desplazamiento de
+# bytes: con saltos de linea de Unix puede saltar a la etiqueta equivocada. Se
+# fuerzan a CRLF para que git no los normalice al clonar en Linux o macOS.
+*.bat text eol=crlf

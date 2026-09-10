@@ -1,3 +1,8 @@
-numpy>=1.24
-pandas>=2.0
-openpyxl>=3.1
+# Los topes evitan que una actualizacion traiga una version MAYOR sin avisar,
+# que es lo que paso al pasar de pandas 2 a pandas 3. Dentro de cada rango, pip
+# instala siempre la mas nueva.
+#
+# Verificado con Python 3.11 y 3.14, numpy 2.5, pandas 3.0 y openpyxl 3.1.
+numpy>=1.24,<3
+pandas>=2.0,<4
+openpyxl>=3.1,<4

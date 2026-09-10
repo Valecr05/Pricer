@@ -15,6 +15,11 @@ Excel de 122 MB tardaba varios minutos en comparar dos fechas.
 
 Necesita numpy, pandas y openpyxl (este último para la senda histórica de IBR).
 
+`requirements.txt` acota cada una por debajo **y por arriba** (`pandas>=2.0,<4`). El tope
+existe porque una actualización de Python trajo pandas 3 sin avisar: el código lo aguanta
+—está verificado con Python 3.11 y 3.14, numpy 2.5, pandas 3.0 y openpyxl 3.1—, pero la
+siguiente versión mayor debe entrar revisada, no de sorpresa.
+
 ```bash
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -49,6 +54,9 @@ py -m venv .venv
 ```
 
 La última línea descarga numpy, pandas y openpyxl. Tarda un par de minutos.
+
+Si prefieres saltarte este paso, también puedes ir directo al 4: la primera vez que hagas
+doble clic en `correr.bat` verá que falta el entorno y se ofrecerá a crearlo él mismo.
 
 **4. Organizar los archivos de entrada.** Dos carpetas, donde te sea cómodo:
 
@@ -120,8 +128,10 @@ La ventana negra no se cierra: ahí queda el mensaje. Los casos frecuentes:
 | Mensaje | Qué pasó |
 |---|---|
 | `No encuentro "mis_rutas.bat"` | falta el paso 6 |
-| `No encuentro el entorno virtual` | falta el paso 3 |
-| `El entorno virtual apunta a una version de Python que ya no esta` | actualizaste o reinstalaste Python; hay que recrear el entorno, y la propia ventana dice cómo |
+| `Todavia no existe el entorno virtual` | falta el paso 3; escribe `S` y lo crea solo |
+| `El entorno virtual apunta a una version de Python que ya no esta` | actualizaste o reinstalaste Python; escribe `S` y lo recrea solo |
+| `Windows no encontro Python` | falta el paso 1, o no marcaste «Add python.exe to PATH» al instalarlo |
+| `No se pudieron instalar las librerias` | la red de la oficina bloqueó a `pip`; el mensaje de `pip` sale unas líneas más arriba |
 | `SALIDA tiene que ser la ruta de un ARCHIVO` | en `mis_rutas.bat` pusiste una carpeta y no un `.html` |
 | `No existe la carpeta de planos` | la ruta de `mis_rutas.bat` está mal escrita |
 | `Sin coincidencias para ...` | la ruta de planos del `.bat` está mal escrita |
@@ -144,25 +154,37 @@ esa ruta apunta al vacío. El archivo `.venv\Scripts\python.exe` sigue existiend
 no es un «no encuentro el entorno virtual»—, pero al arrancar no halla el intérprete
 detrás.
 
-**Cómo se arregla.** Recreando el entorno. Abre una ventana de comandos en la carpeta de
-`sx-pricer` —en el Explorador, escribe `cmd` en la barra de direcciones y Enter— y pega:
+**Cómo se arregla: solo.** `correr.bat` lo detecta desde el arranque y se ofrece a
+recrearlo ahí mismo:
+
+```
+El entorno virtual apunta a una version de Python que ya no esta en
+su sitio. Pasa despues de actualizar o reinstalar Python.
+
+Se arregla recreandolo, aqui mismo. Tarda un par de minutos y no se
+pierde nada: el entorno solo contiene librerias. Tus rutas siguen en
+mis_rutas.bat y los resumenes en .sx-cache, asi que la corrida no
+tiene que volver a leer los planos.
+
+Escribe S y pulsa Enter para recrearlo ahora, o N para salir:
+```
+
+Escribe `S` y sigue solo. No hay que abrir ninguna ventana de comandos ni navegar a
+ninguna carpeta —`correr.bat` trabaja siempre en la suya, que es el error más fácil de
+cometer a mano—.
+
+**Cómo lo detecta.** No comprueba que el archivo exista, porque existe: le pide al entorno
+su versión y mira que conteste `Python ...`. Un entorno huérfano contesta
+`No Python at ...`, y ahí salta la reparación.
+
+Si prefieres hacerlo tú, es esto, en una ventana de comandos abierta en la carpeta de
+`sx-pricer`:
 
 ```
 rmdir /s /q .venv
 py -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 ```
-
-Si el `pip` falla por el proxy, cambia la tercera línea por la del paso 3, con los
-`--trusted-host`.
-
-**No se pierde nada:** el entorno solo contiene librerías. Las rutas siguen en
-`mis_rutas.bat` y los resúmenes en `.sx-cache`, así que la siguiente corrida no reprocesa
-los planos.
-
-`correr.bat` detecta este caso desde el arranque —le pide al entorno una cuenta trivial y
-comprueba la respuesta— y muestra esas tres líneas en pantalla, en vez de dejar el mensaje
-de Windows.
 
 ### En macOS o Linux
 
