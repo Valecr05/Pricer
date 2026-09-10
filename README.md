@@ -121,6 +121,7 @@ La ventana negra no se cierra: ahí queda el mensaje. Los casos frecuentes:
 |---|---|
 | `No encuentro "mis_rutas.bat"` | falta el paso 6 |
 | `No encuentro el entorno virtual` | falta el paso 3 |
+| `El entorno virtual apunta a una version de Python que ya no esta` | actualizaste o reinstalaste Python; hay que recrear el entorno, y la propia ventana dice cómo |
 | `SALIDA tiene que ser la ruta de un ARCHIVO` | en `mis_rutas.bat` pusiste una carpeta y no un `.html` |
 | `No existe la carpeta de planos` | la ruta de `mis_rutas.bat` está mal escrita |
 | `Sin coincidencias para ...` | la ruta de planos del `.bat` está mal escrita |
@@ -128,6 +129,40 @@ La ventana negra no se cierra: ahí queda el mensaje. Los casos frecuentes:
 | `estos archivos se IGNORARON` | hay `.txt` en la carpeta de curvas cuyo nombre no encaja con `IND_IBR_AAAAMMDD.txt`; la ventana dice cuáles y por qué |
 | `controles de integridad fallidos` | un plano llegó truncado o incompleto; el reporte dice cuál y en qué control |
 | `Se necesitan al menos dos fechas` | solo hay un plano procesado |
+
+#### Después de actualizar Python
+
+Es el tropiezo más común, y el mensaje de Windows no ayuda:
+
+```
+No Python at '"C:\Program Files\Python311\python.exe'
+```
+
+**Qué pasó.** Al crear el entorno virtual, este guarda en `.venv\pyvenv.cfg` la **ruta
+absoluta** del Python con el que se creó. Si la actualización dejó Python en otra carpeta,
+esa ruta apunta al vacío. El archivo `.venv\Scripts\python.exe` sigue existiendo —por eso
+no es un «no encuentro el entorno virtual»—, pero al arrancar no halla el intérprete
+detrás.
+
+**Cómo se arregla.** Recreando el entorno. Abre una ventana de comandos en la carpeta de
+`sx-pricer` —en el Explorador, escribe `cmd` en la barra de direcciones y Enter— y pega:
+
+```
+rmdir /s /q .venv
+py -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+```
+
+Si el `pip` falla por el proxy, cambia la tercera línea por la del paso 3, con los
+`--trusted-host`.
+
+**No se pierde nada:** el entorno solo contiene librerías. Las rutas siguen en
+`mis_rutas.bat` y los resúmenes en `.sx-cache`, así que la siguiente corrida no reprocesa
+los planos.
+
+`correr.bat` detecta este caso desde el arranque —le pide al entorno una cuenta trivial y
+comprueba la respuesta— y muestra esas tres líneas en pantalla, en vez de dejar el mensaje
+de Windows.
 
 ### En macOS o Linux
 
