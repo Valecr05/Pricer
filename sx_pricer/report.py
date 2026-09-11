@@ -36,53 +36,67 @@ def e(x) -> str:
 # ----------------------------------------------------------------------------
 
 CSS = """
-/* Paleta rosada sobre crema. Todas las combinaciones de texto usadas cumplen
-   AA (4.5:1); las cifras van en Arial, cuyos dígitos ya son de ancho uniforme,
+/* Azul corporativo y verde sobre gris muy claro. Todas las combinaciones de texto
+   usadas cumplen AA (4.5:1). Las dos series de las gráficas —azul #1A5FA8 y verde
+   #0E8A4A— están validadas para daltonismo: ΔE de 21,2 en deuteranopía y de 22,3 en
+   visión normal, muy por encima del umbral de 8. El color distingue la ENTIDAD (COP
+   contra UVR, o el bloque) y el trazo distingue la FECHA (T-1 discontinuo, T continuo),
+   así que la identidad nunca depende solo del color.
+   Las cifras van en Arial, cuyos dígitos ya son de ancho uniforme,
    así que las columnas numéricas quedan alineadas sin fuente monoespaciada.
    Lo único que sigue en monoespaciada es el registro crudo de «la cinta»: ahí el
    ancho fijo no es estética, es lo que hace que los cortes de campo sean ciertos. */
 :root{
-  --crema:#FFFDF7; --blanco:#FFF; --rosa-claro:#FFD6E8; --rosa:#FFB8D2;
-  --rosa-fuerte:#E58FB0; --rosa-tenue:#FFF1F6; --zebra:#FFF7FB;
-  --regla:#F0BFD4; --regla-suave:#FBE3EC;
-  --tinta:#3A2230; --tinta-media:#452937; --tenue:#7A5A68;
-  --acento:#A8214B; --alza:#A81238; --baja:#146B4E; --alerta:#8F5A0F;
-  --ok-fondo:#E9F4EF; --ok-borde:#A9CFC0;
-  --mal-fondo:#FBEBEE; --mal-borde:#E0AEB9;
-  --av-fondo:#FBF2E2; --av-borde:#DEC79A;
+  --fondo:#F2F5F8; --blanco:#FFF;
+  --marca:#0B2E4F;        /* azul corporativo: cabecera y encabezados de tabla */
+  --marca-media:#16456E; --tinte:#EDF3F8; --zebra:#F7FAFC;
+  --regla:#D7DFE7; --regla-suave:#EAEFF4;
+  --tinta:#0F2942; --tinta-media:#2C4863; --tenue:#61798F; --apagado:#9FB3C4;
+  --acento:#0E8A4A;       /* verde corporativo: destacados y serie T */
+  --azul:#1A5FA8;         /* la otra serie; validado contra el verde para daltonismo */
+  --alza:#C0392B; --baja:#0E7C42; --alerta:#B0710A;
+  --ok-fondo:#E6F4EC; --ok-borde:#A8D5BC;
+  --mal-fondo:#FBEAE8; --mal-borde:#EDB6AF;
+  --av-fondo:#FDF4E4; --av-borde:#E4C894;
   --top-h:96px;        /* se remide en tiempo de ejecucion: ver ajustarAlto() */
   --sans:Arial,"Helvetica Neue",Helvetica,sans-serif;
   --mono:Consolas,"SF Mono",Menlo,"DejaVu Sans Mono",monospace;
-  --sombra:0 1px 2px rgba(58,34,48,.05);
+  --sombra:0 1px 3px rgba(11,41,66,.07),0 1px 2px rgba(11,41,66,.04);
+  --sombra-alta:0 4px 14px rgba(11,41,66,.10),0 1px 3px rgba(11,41,66,.06);
+  --radio:10px;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:var(--top-h)}
-body{margin:0;background:var(--crema);color:var(--tinta);font-family:var(--sans);
+body{margin:0;background:var(--fondo);color:var(--tinta);font-family:var(--sans);
   font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1560px;margin:0 auto;padding:0 28px 96px}
 
 /* --- barra superior --- */
-.top{position:sticky;top:0;z-index:50;background:var(--rosa-fuerte);color:var(--tinta);
-  box-shadow:0 1px 0 rgba(58,34,48,.14)}
+.top{position:sticky;top:0;z-index:50;color:#FFF;
+  background:linear-gradient(100deg,#08233D 0%,var(--marca) 45%,#17517F 100%);
+  box-shadow:0 2px 10px rgba(11,41,66,.18)}
 .top-in{max-width:1560px;margin:0 auto;padding:15px 28px 0;display:flex;
   flex-direction:column;align-items:center;gap:11px}
 .top h1{font-size:15px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;
-  margin:0;text-align:center}
+  margin:0;text-align:center;color:#FFF}
+/* el filete verde es la firma de la marca: separa cabecera de contenido */
+.top h1::after{content:"";display:block;width:46px;height:3px;border-radius:2px;
+  background:var(--acento);margin:9px auto 0}
 
 .tabs{display:flex;gap:2px;justify-content:center;flex-wrap:wrap}
 .tab{appearance:none;background:transparent;border:0;border-bottom:2px solid transparent;
-  color:var(--tinta-media);font-family:inherit;font-size:12px;font-weight:400;
+  color:rgba(255,255,255,.72);font-family:inherit;font-size:12px;font-weight:400;
   letter-spacing:.1em;text-transform:uppercase;padding:7px 14px 6px;cursor:pointer;
   white-space:nowrap;transition:color .12s,border-color .12s}
-.tab:hover{color:var(--tinta)}
-.tab:focus-visible{outline:2px solid var(--tinta);outline-offset:2px;border-radius:2px}
-.tab[aria-selected="true"]{color:var(--tinta);font-weight:700;border-bottom-color:var(--tinta)}
-.barra{border-top:1px solid rgba(58,34,48,.09)}
+.tab:hover{color:#FFF}
+.tab:focus-visible{outline:2px solid var(--acento);outline-offset:2px;border-radius:2px}
+.tab[aria-selected="true"]{color:#FFF;font-weight:700;border-bottom-color:var(--acento)}
 .panel[hidden]{display:none}
 .panel>section:first-child,.panel>div:first-child>section:first-child{margin-top:34px}
 
 /* --- barra de parámetros --- */
-.barra{background:var(--rosa);border-top:1px solid rgba(58,34,48,.09)}
+.barra{background:var(--blanco);border-top:1px solid rgba(255,255,255,.14);
+  border-bottom:1px solid var(--regla);box-shadow:var(--sombra)}
 .barra-in{max-width:1560px;margin:0 auto;padding:9px 28px;display:flex;flex-wrap:wrap;
   gap:8px 22px;align-items:center;font-size:12px}
 .barra label{display:inline-flex;align-items:center;gap:7px;color:var(--tinta-media);
@@ -95,7 +109,7 @@ body{margin:0;background:var(--crema);color:var(--tinta);font-family:var(--sans)
 .barra select:focus,.barra input:focus{outline:2px solid var(--acento);outline-offset:1px;
   border-color:var(--acento)}
 .barra .u{color:var(--tinta-media);font-weight:400}
-.barra .aviso{color:#7A1226;font-size:11px;font-weight:700;text-transform:none;letter-spacing:0}
+.barra .aviso{color:var(--alza);font-size:11px;font-weight:700;text-transform:none;letter-spacing:0}
 
 /* --- estructura --- */
 section{margin-top:52px}
@@ -103,11 +117,17 @@ section{margin-top:52px}
   color:var(--acento);margin:0 0 8px}
 h2{font-size:23px;font-weight:700;letter-spacing:-.015em;margin:0 0 6px;line-height:1.2}
 h3{font-size:14px;font-weight:700;letter-spacing:.01em;margin:0}
-.lede{max-width:78ch;color:#54303F;margin:10px 0 22px}
-.card{background:var(--blanco);border:1px solid var(--regla);border-radius:5px;
-  margin-bottom:20px;overflow:hidden;box-shadow:var(--sombra)}
-.card-hd{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;padding:13px 18px;
-  border-bottom:1px solid var(--regla-suave);background:var(--rosa-tenue)}
+.lede{max-width:78ch;color:var(--tinta-media);margin:10px 0 22px}
+.card{background:var(--blanco);border:1px solid var(--regla);border-radius:var(--radio);
+  margin-bottom:20px;overflow:hidden;box-shadow:var(--sombra);
+  transition:box-shadow .15s}
+.card:hover{box-shadow:var(--sombra-alta)}
+.card-hd{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:13px 18px;
+  border-bottom:1px solid var(--regla-suave);background:var(--tinte)}
+/* Un punto de color antes del titulo, como los distintivos de la referencia: da
+   un ancla visual a cada tarjeta sin gastar un icono. */
+.card-hd h3::before{content:"";display:inline-block;width:8px;height:8px;
+  border-radius:50%;background:var(--acento);margin-right:9px;vertical-align:middle}
 .card-hd .meta{margin-left:auto;font-size:11px;color:var(--tenue);letter-spacing:.02em}
 /* El boton de descarga va siempre al extremo derecho de la cabecera. Si la tarjeta
    trae `.meta`, esta ya empuja con margin-left:auto y el boton queda detras; si no,
@@ -117,7 +137,7 @@ h3{font-size:14px;font-weight:700;letter-spacing:.01em;margin:0}
   text-transform:uppercase;color:var(--tenue);padding:4px 10px;cursor:pointer;
   transition:background .12s,color .12s,border-color .12s}
 .card-hd .meta ~ .xls{margin-left:0}
-.xls:hover{background:var(--rosa-tenue);color:var(--tinta);border-color:var(--rosa-fuerte)}
+.xls:hover{background:var(--tinte);color:var(--tinta);border-color:var(--marca)}
 .xls:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
 .xls[disabled]{opacity:.45;cursor:default}
 .toggle{display:inline-flex;border:1px solid var(--regla);border-radius:3px;overflow:hidden}
@@ -126,7 +146,7 @@ h3{font-size:14px;font-weight:700;letter-spacing:.01em;margin:0}
   color:var(--tenue);padding:4px 11px;cursor:pointer;transition:background .12s,color .12s}
 .tg:first-child{border-left:0}
 .tg:hover{color:var(--acento)}
-.tg[aria-pressed="true"]{background:var(--rosa-fuerte);color:var(--tinta)}
+.tg[aria-pressed="true"]{background:var(--marca);color:var(--tinta)}
 .tg:focus-visible{outline:2px solid var(--acento);outline-offset:-2px}
 .tg[disabled]{opacity:.4;cursor:default}
 .tg[disabled]:hover{color:var(--tenue)}
@@ -135,7 +155,7 @@ td.alvenc{color:var(--alerta)}
 td.alvenc small{font-size:9px;letter-spacing:.04em;margin-left:5px}
 td .extrap{color:var(--alerta);margin-left:4px;font-weight:700}
 .controles{display:flex;flex-wrap:wrap;gap:10px 24px;align-items:center;
-  background:var(--rosa-tenue);border:1px solid var(--regla);border-radius:5px;
+  background:var(--tinte);border:1px solid var(--regla);border-radius:5px;
   padding:12px 18px;margin:0 0 22px}
 .controles label{display:inline-flex;align-items:center;gap:8px;font-size:10px;
   font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--tinta-media)}
@@ -153,12 +173,12 @@ td .extrap{color:var(--alerta);margin-left:4px;font-weight:700}
   padding:6px 18px 16px}
 .campo{border-left:1px solid var(--regla);padding:8px 0 0 7px;margin-right:2px}
 .campo:first-child{border-left:none;padding-left:0}
-.campo .pos{font-family:var(--sans);font-size:9px;color:#B08A9B;letter-spacing:.06em;display:block}
+.campo .pos{font-family:var(--sans);font-size:9px;color:var(--apagado);letter-spacing:.06em;display:block}
 .campo .nom{font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.1em;
   text-transform:uppercase;color:var(--acento);display:block;white-space:nowrap}
 .campo .val{white-space:pre;display:block;padding-top:4px;color:var(--tinta)}
-.campo.skip .val{color:#CDAEBC}
-.campo.skip .nom{color:#C29FAE}
+.campo.skip .val{color:var(--apagado)}
+.campo.skip .nom{color:var(--apagado)}
 
 /* --- embudo --- */
 .embudos{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
@@ -166,16 +186,27 @@ td .extrap{color:var(--alerta);margin-left:4px;font-weight:700}
 .embudo div{background:var(--blanco);padding:10px 18px;display:flex;gap:14px;align-items:baseline}
 .embudo .et{flex:1}
 .embudo .n{font-variant-numeric:tabular-nums;font-weight:700}
-.embudo .barrita{height:7px;background:var(--rosa);border-radius:4px;min-width:3px}
-.embudo .total{background:var(--rosa-tenue);font-weight:700}
+.embudo .barrita{height:7px;background:var(--marca-media);border-radius:4px;min-width:3px}
+.embudo .total{background:var(--tinte);font-weight:700}
 
 /* --- tarjetas de resumen --- */
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:16px}
-.tile{background:var(--blanco);border:1px solid var(--regla);border-top:3px solid var(--rosa-fuerte);
-  border-radius:5px;padding:15px 18px;box-shadow:var(--sombra)}
-.tile .k{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--tenue)}
-.tile .v{font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:5px;
-  letter-spacing:-.02em;line-height:1.15}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(216px,1fr));gap:16px}
+/* Ficha con distintivo redondo a la izquierda y el dato en grande, como en la
+   referencia. El distintivo lleva el tono del estado, asi que el color no es lo
+   unico que lo dice: el propio numero y su subtitulo ya lo cuentan. */
+.tile{background:var(--blanco);border:1px solid var(--regla);border-radius:var(--radio);
+  padding:15px 17px;box-shadow:var(--sombra);display:flex;gap:13px;align-items:flex-start;
+  transition:box-shadow .15s}
+.tile:hover{box-shadow:var(--sombra-alta)}
+.tile .ico{flex:0 0 38px;height:38px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:17px;line-height:1;background:var(--tinte);margin-top:2px}
+.tile.ok .ico{background:var(--ok-fondo)} .tile.mal .ico{background:var(--mal-fondo)}
+.tile.av .ico{background:var(--av-fondo)}
+.tile .txt{min-width:0}
+.tile .k{font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--tenue);line-height:1.35}
+.tile .v{font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px;
+  letter-spacing:-.02em;line-height:1.15;color:var(--marca)}
 .tile .s{font-size:12px;color:var(--tenue);margin-top:2px}
 
 /* --- píldoras --- */
@@ -184,7 +215,7 @@ td .extrap{color:var(--alerta);margin-left:4px;font-weight:700}
 .pill.ok{color:var(--baja);border-color:var(--ok-borde);background:var(--ok-fondo)}
 .pill.mal{color:var(--alza);border-color:var(--mal-borde);background:var(--mal-fondo)}
 .pill.av{color:var(--alerta);border-color:var(--av-borde);background:var(--av-fondo)}
-.pill.n{color:var(--tenue);border-color:var(--regla);background:var(--rosa-tenue);font-weight:400}
+.pill.n{color:var(--tenue);border-color:var(--regla);background:var(--tinte);font-weight:400}
 
 /* --- tablas --- */
 /* Fijar un eje del overflow convierte esto en un contexto de scroll, y contra ese
@@ -199,24 +230,28 @@ table{border-collapse:collapse;width:100%;font-size:12px;font-variant-numeric:ta
 /* Solo la fila de nombres de columna queda fija, y contra el contenedor .tw. La de
    agrupacion se declara static a proposito: si las dos fueran pegajosas al mismo
    top:0 se superpondrian entre si. */
-thead th{background:var(--rosa-claro);text-align:right;
-  padding:8px 11px;font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--tinta);border-bottom:1px solid var(--rosa-fuerte);white-space:nowrap}
+thead th{background:var(--marca);text-align:right;
+  padding:9px 11px;font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:#FFF;border-bottom:1px solid var(--marca);white-space:nowrap}
 thead th:not(.grupo){position:sticky;top:0;z-index:2}
 thead th:first-child,tbody td:first-child{text-align:left}
-thead th.grupo{text-align:center;background:var(--rosa);color:var(--tinta);
-  border-bottom:1px solid var(--rosa-fuerte);position:static}
+/* La fila de agrupacion va un tono mas claro para que se lea como el nivel de
+   arriba y no como otra fila de columnas. */
+thead th.grupo{text-align:center;background:var(--marca-media);color:rgba(255,255,255,.92);
+  border-bottom:1px solid rgba(255,255,255,.18);position:static;font-weight:400}
 tbody td{padding:6px 11px;text-align:right;border-bottom:1px solid var(--regla-suave);
   white-space:nowrap}
-tbody tr:hover td{background:var(--zebra)}
-tbody tr.vacia td{color:#C29FAE}
-td.alza{color:var(--alza);font-weight:700} td.baja{color:var(--baja);font-weight:700}
-td.neutro{color:var(--tenue)}
+tbody tr:nth-child(even) td{background:var(--zebra)}
+tbody tr:hover td{background:var(--tinte)}
+tbody tr.vacia td{color:var(--apagado)}
+td.alza,.v.alza{color:var(--alza);font-weight:700}
+td.baja,.v.baja{color:var(--baja);font-weight:700}
+td.neutro,.v.neutro{color:var(--tenue)}
 td.key{font-weight:700}
 td.ventana{font-variant-numeric:tabular-nums;color:var(--tinta-media)}
 .sep{border-left:1px solid var(--regla)}
 .nota-tabla{margin:0;padding:11px 18px 13px;border-top:1px solid var(--regla-suave);
-  background:var(--rosa-tenue);font-size:11.5px;color:#54303F;line-height:1.5}
+  background:var(--tinte);font-size:11.5px;color:var(--tinta-media);line-height:1.5}
 .nota-tabla b{color:var(--alerta)}
 
 /* --- calidad --- */
@@ -224,11 +259,11 @@ td.ventana{font-variant-numeric:tabular-nums;color:var(--tinta-media)}
   border-radius:4px;padding:13px 18px;margin-bottom:10px;box-shadow:var(--sombra)}
 .issue.error{border-left-color:var(--alza)}
 .issue.aviso{border-left-color:var(--alerta)}
-.issue.info{border-left-color:var(--rosa-fuerte)}
+.issue.info{border-left-color:var(--marca)}
 .issue .hd{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
 .issue .cod{font-family:var(--mono);font-size:11px;color:var(--tenue)}
 .issue .cnt{font-weight:700;font-variant-numeric:tabular-nums;margin-left:auto}
-.issue p{margin:7px 0 0;max-width:92ch;font-size:13px;color:#54303F}
+.issue p{margin:7px 0 0;max-width:92ch;font-size:13px;color:var(--tinta-media)}
 .issue .muestra{font-family:var(--mono);font-size:11px;color:var(--tenue);margin-top:7px}
 
 /* --- gráficas --- */
@@ -243,12 +278,12 @@ td.ventana{font-variant-numeric:tabular-nums;color:var(--tinta-media)}
 .leyenda{display:flex;flex-wrap:wrap;gap:18px;padding:0 18px 14px;font-size:11px}
 .leyenda span{display:inline-flex;align-items:center;gap:7px;color:var(--tinta-media)}
 .leyenda i{width:20px;height:0;border-top-width:2px;border-top-style:solid;display:inline-block}
-.tip{position:fixed;pointer-events:none;background:var(--tinta);color:var(--crema);
+.tip{position:fixed;pointer-events:none;background:var(--tinta);color:var(--fondo);
   font-size:11px;font-variant-numeric:tabular-nums;padding:6px 9px;border-radius:4px;opacity:0;
   transition:opacity .12s;z-index:99;white-space:pre;box-shadow:0 2px 8px rgba(58,34,48,.22)}
 
 /* --- pie --- */
-footer{margin-top:64px;border-top:2px solid var(--rosa);padding-top:22px;font-size:11px;
+footer{margin-top:64px;border-top:2px solid var(--marca-media);padding-top:22px;font-size:11px;
   color:var(--tenue)}
 footer dl{display:grid;grid-template-columns:auto 1fr;gap:3px 18px;margin:0 0 16px;max-width:900px}
 footer dt{color:var(--tinta-media);font-weight:700}
@@ -274,6 +309,18 @@ noscript p{background:var(--av-fondo);border:1px solid var(--av-borde);border-ra
   .tw{overflow:visible;max-height:none}  /* sin scroll, la tabla se pagina completa */
   section,.card{break-inside:avoid} thead th{position:static}
   .card,.tile,.issue{box-shadow:none}
+  /* En pantalla la cabecera y los encabezados de tabla van en azul oscuro. Al
+     imprimir eso son planchas de tinta, y muchas impresoras de oficina descartan
+     los fondos: el texto blanco saldria sobre blanco. Se invierten a tinta sobre
+     papel, conservando la regla que marca la division. */
+  .top{background:#fff;color:var(--tinta);box-shadow:none;
+       border-bottom:2px solid var(--marca)}
+  .top h1{color:var(--tinta)}
+  thead th{background:#fff;color:var(--tinta);border-bottom:1.5px solid var(--marca)}
+  thead th.grupo{background:#fff;color:var(--tinta-media);
+                 border-bottom:1px solid var(--regla)}
+  .tile .ico{display:none}               /* el distintivo no aporta en papel */
+  tbody tr:nth-child(even) td{background:#fff}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 """
@@ -682,9 +729,27 @@ function llenarSelect(sel, seleccion){
   }
 }
 // ---------- secciones ----------
-function tile(k, v, s, cls){
-  return '<div class="tile"><div class="k">' + esc(k) + '</div><div class="v' +
-         (cls ? ' ' + cls : '') + '">' + v + '</div><div class="s">' + esc(s) + '</div></div>';
+// Iconos de trazo, dibujados a mano en SVG: el reporte tiene que abrir desde el
+// disco y sin red, asi que no hay tipografia de iconos que cargar.
+var ICONOS = {
+  calendario: 'M3 5h14v12H3zM3 9h14M7 3v4M13 3v4',
+  capas:      'M10 3l7 4-7 4-7-4zM3 11l7 4 7-4M3 14.5l7 4 7-4',
+  flecha:     'M3 14l4-5 3 3 6-7M13 5h4v4',
+  onda:       'M3 15l4-6 3 3 3-7 4 10',
+  escudo:     'M10 3l6 2v5c0 4-3 6-6 7-3-1-6-3-6-7V5zM7 10l2 2 4-4',
+  alerta:     'M10 3l7 13H3zM10 8v4M10 14.5v.01'
+};
+function icono(nombre){
+  return '<svg viewBox="0 0 20 20" width="19" height="19" fill="none" ' +
+    'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
+    'stroke-linejoin="round" aria-hidden="true"><path d="' + ICONOS[nombre] + '"/></svg>';
+}
+function tile(k, v, s, cls, ico, tono){
+  return '<div class="tile' + (tono ? ' ' + tono : '') + '">' +
+         '<div class="ico">' + (ico ? icono(ico) : '') + '</div><div class="txt">' +
+         '<div class="k">' + esc(k) + '</div><div class="v' +
+         (cls ? ' ' + cls : '') + '">' + v + '</div>' +
+         '<div class="s">' + esc(s) + '</div></div></div>';
 }
 function promedio(xs){
   return xs.length ? xs.reduce(function(a, b){ return a + b; }, 0) / xs.length : null;
@@ -699,13 +764,19 @@ function renderResumen(){
   var cuenta = function(sev){ return issues.filter(function(i){ return i.sev === sev; }).length; };
   var dias = Math.round((new Date(S.t) - new Date(S.t1)) / 86400000);
   $('resumen-tiles').innerHTML =
-    tile('Ventana comparada', esc(S.t1) + ' &rarr; ' + esc(S.t), dias + ' días calendario') +
-    tile('Universo valorado en T', fmt(rt().n_universo, 0), 'de ' + fmt(rt().n_registros, 0) + ' registros') +
-    tile('Movimiento medio CDT tasa fija', fmt(promedio(movs), 1), 'pb absolutos entre las dos fechas') +
-    tile('Movimiento medio TES COP', bps(medioTes), 'pb · ' + fmt(cop.length, 0) + ' referencias', clase(medioTes)) +
+    tile('Ventana comparada', esc(S.t1) + ' &rarr; ' + esc(S.t), dias + ' días calendario',
+         '', 'calendario') +
+    tile('Universo valorado en T', fmt(rt().n_universo, 0),
+         'de ' + fmt(rt().n_registros, 0) + ' registros', '', 'capas') +
+    tile('Movimiento medio CDT tasa fija', fmt(promedio(movs), 1),
+         'pb absolutos entre las dos fechas', '', 'flecha') +
+    tile('Movimiento medio TES COP', bps(medioTes),
+         'pb · ' + fmt(cop.length, 0) + ' referencias', clase(medioTes), 'onda') +
     tile('Integridad', fallidos ? fmt(fallidos, 0) : 'OK',
-         fallidos ? 'controles fallidos' : 'los controles del proveedor cuadran') +
-    tile('Calidad de datos', cuenta('error') + ' / ' + cuenta('aviso'), 'errores / avisos');
+         fallidos ? 'controles fallidos' : 'los controles del proveedor cuadran',
+         '', 'escudo', fallidos ? 'mal' : 'ok') +
+    tile('Calidad de datos', cuenta('error') + ' / ' + cuenta('aviso'), 'errores / avisos',
+         '', 'alerta', cuenta('error') ? 'mal' : (cuenta('aviso') ? 'av' : 'ok'));
 }
 
 function renderCinta(){
@@ -955,24 +1026,24 @@ function notaMuestra(filas){
 }
 
 var specTes = null;
-// Cuatro luminancias distintas para que las series se distingan tambien impresas
-// en gris o por alguien con deficiencia de vision de color. El trazo discontinuo
-// marca T-1 y el continuo T, de forma consistente en todo el reporte.
-// Cuatro luminancias distintas, para que las series se distingan tambien impresas
-// en gris o por alguien con deficiencia de vision de color. El trazo discontinuo
-// marca T-1 y el continuo T, de forma consistente en todo el reporte.
-//   graficas de bloque: el par de maximo contraste, porque son las mas consultadas
-//   TES: rosa para COP y ciruela para UVR, claro-discontinuo contra oscuro-continuo
+// El color distingue la ENTIDAD y el trazo la FECHA: T-1 va en el tono claro y
+// discontinuo, T en el oscuro y continuo. Asi la identidad nunca depende solo del
+// color, que es lo que pide la lectura con daltonismo y la impresion en gris.
+//
+// El azul y el verde estan validados como pareja categorica: 21,2 de separacion en
+// deuteranopia y 22,3 en vision normal, contra un umbral de 8. Los dos tonos claros
+// pasan de 3:1 de contraste contra el blanco, el minimo para un trazo que no es texto
+// (3,39 el azul y 3,33 el verde).
+//
+// Las barras van en gris azulado y no en un tono de la paleta: al no competir de color
+// con las lineas se pueden dejar mas opacas sin taparlas. Los numeros del eje derecho
+// van en un gris mas oscuro, porque el de las barras no alcanza los 4,5:1 que necesita
+// un texto.
 var COLORES = {
-  // Barras en gris neutro: al no competir de tono con las lineas se pueden dejar
-  // mas opacas y aun asi no las tapan. Al 50 % el gris quedaba casi invisible
-  // (1,53 de contraste contra el fondo); al 70 % sube a 1,85 y se lee.
-  // Los numeros del eje derecho van en un gris mas oscuro, porque el de las barras
-  // no alcanza contraste para texto (2,53 contra el 4,5 que se necesita).
-  barra: '#9FA3A9', barraOpacidad: 0.7, deltaEje: '#6B7075',
-  bloqueT1: '#E58FB0', bloqueT: '#C93384',
-  copT1: '#E58FB0', copT: '#A8214B',
-  uvrT1: '#9C8AA0', uvrT: '#3A2230'
+  barra: '#8FA0B2', barraOpacidad: 0.7, deltaEje: '#5A6A78',
+  bloqueT1: '#5E8FC4', bloqueT: '#1A5FA8',
+  copT1: '#5E8FC4', copT: '#1A5FA8',
+  uvrT1: '#3F9E6B', uvrT: '#0E8A4A'
 };
 
 function renderTes(){

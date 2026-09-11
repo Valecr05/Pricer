@@ -499,6 +499,55 @@ El delta, siempre sobre la tasa de venta:
 Como el delta mueve el **margen** y este va dentro del producto, 100 pb de delta se
 traducen en unos 106 pb sobre la tasa de venta. Es deliberado.
 
+#### Pendiente: la tasa de salida lee un solo punto de la senda
+
+**Los nodos largos rinden cada vez menos a 90 y 180 días, hasta llegar a negativo.** Está
+localizado, medido y **sin corregir**: es una convención de negocio y se cambia cuando se
+confirme.
+
+La tasa de salida es `(1 + margen real + δ) × (1 + IPC esperado en T+h) − 1`. Ese
+`IPC en T+h` es **un solo punto** de la senda —el del día de la venta— y es **el mismo
+para todos los plazos**:
+
+| plazo del nodo | IPC con que se descuenta V₁ | IPC medio de la vida que le queda |
+|---|---|---|
+| 6 meses | 7,333 % | 7,659 % |
+| 12 meses | 7,333 % | 6,981 % |
+| 24 meses | 7,333 % | 5,730 % |
+| 36 meses | 7,333 % | 5,153 % |
+
+Con una senda **plana** da igual: las dos columnas coinciden. Pero las sendas reales de
+IPC **convergen** —arrancan altas y bajan—, y ahí el nodo de 36 meses se descuenta al
+7,3 % cuando el propio escenario dice que va a vivir una inflación media del 5,2 %. La
+tasa de salida queda muy por encima de la de entrada y el castigo se multiplica por la
+duración. Encima los cupones de V₁ **sí** leen la senda entera, así que bajan: descuento
+alto con cupones bajos.
+
+Medido con la senda de arriba (8,0 % → 4,0 % en 18 meses), barra 6,14 %, Tasa (T) 11,07 %
+y cupón 3 %, cambiando **solo** cómo se arma esa tasa:
+
+| plazo | hoy · un punto | con el IPC medio | período a período |
+|---|---|---|---|
+| 6 m | 11,02 % | 10,68 % | 11,02 % |
+| 12 m | 9,04 % | 10,08 % | 11,03 % |
+| 18 m | 4,68 % | 9,56 % | 11,06 % |
+| 24 m | **−0,93 %** | 9,20 % | 11,04 % |
+| 30 m | **−6,09 %** | 9,05 % | 11,02 % |
+| 36 m | **−10,79 %** | 8,97 % | **10,92 %** |
+
+A 180 días es el mismo patrón, más suave: de 11,67 % a **2,75 %** con el método de hoy, y
+de 11,66 % a 11,61 % período a período.
+
+**La corrección propuesta** es descontar V₁ período a período, cada flujo con el mismo IPC
+que armó su propio cupón — **exactamente lo que IBR ya hace**. Es el mismo principio del
+invariante 6 («el cupón y el descuento comparten el índice»), que a IPC nunca se le
+aplicó. Deja el HPR plano en los seis plazos y clavado en la tasa de entrada.
+
+**IBR no tiene este problema**, porque su V₁ ya descuenta así desde que se adoptó el
+método de la bvc. La bajada que sí tiene con el plazo es suave —13,2 % a 11,9 % a 36
+meses— y **legítima**: sigue la Tasa (T) de su propio nodo cuando la curva `IND_IBR` viene
+cayendo. Un papel largo sobre una curva que baja rinde menos, y eso es información.
+
 #### Conviene que `params.json` y el archivo de escenarios coincidan en T
 
 El precio de entrada se arma con el IPC de la barra y los flujos que se cobran con la
@@ -1267,15 +1316,43 @@ Al imprimir, los botones no salen.
 
 ### Colores y tipografía
 
-Paleta rosada sobre crema: `#E58FB0` en la barra superior, `#FFB8D2` en la de
-parámetros, `#FFD6E8` en los encabezados de tabla y `#FFFDF7` de fondo de página. La
-tinta es un ciruela profundo (`#3A2230`) que armoniza con los rosados y da 6,1:1 de
-contraste incluso sobre el rosado más fuerte. Todas las combinaciones de texto del
-reporte cumplen el nivel AA (4,5:1); están medidas, no estimadas.
+**Azul corporativo y verde sobre gris muy claro.**
 
-Los rosados quedaron en las superficies y la tinta oscura en los datos. Es la
-jerarquía que hace legible una tabla densa: el color identifica la interfaz y el
-contraste identifica las cifras.
+| Dónde | Color |
+|---|---|
+| Cabecera y encabezados de tabla | `#0B2E4F` — azul profundo, texto en blanco |
+| Fila de agrupación de las tablas | `#16456E`, un tono más claro, para que se lea como el nivel de arriba |
+| Fondo de página | `#F2F5F8` |
+| Tarjetas y barra de parámetros | blanco, con `#D7DFE7` de regla |
+| Destacados, filete de la cabecera, punto de cada tarjeta | `#0E8A4A` — el verde |
+| Serie de las gráficas | `#1A5FA8` azul y `#0E8A4A` verde |
+
+Las superficies llevan el color y los datos la tinta oscura. Es la jerarquía que hace
+legible una tabla densa: el color identifica la interfaz y el contraste identifica las
+cifras. Todas las combinaciones de texto cumplen el nivel AA (4,5:1); están medidas, no
+estimadas.
+
+**Las dos series están validadas para daltonismo**, no elegidas a ojo: el azul y el
+verde dan **21,2** de separación en deuteranopía y **22,3** en visión normal, contra un
+umbral de 8. Y el color no es lo único que las distingue: **el color dice la entidad**
+—COP contra UVR, o el bloque— **y el trazo dice la fecha** —T-1 discontinuo, T
+continuo—, así que las series siguen siendo legibles impresas en gris. Los dos tonos
+claros de T-1 pasan de 3:1 de contraste contra el blanco, el mínimo para un trazo que no
+es texto: 3,39 el azul y 3,33 el verde.
+
+Las barras de Δ pb van en un gris azulado (`#8FA0B2` al 70 %) y no en un tono de la
+paleta: al no competir de color con las líneas se pueden dejar más opacas sin taparlas.
+Los números de su eje van en un gris más oscuro, porque el de las barras no alcanza los
+4,5:1 que necesita un texto.
+
+**Al imprimir, la cabecera y los encabezados de tabla se invierten** a tinta sobre papel.
+En pantalla son planchas de azul oscuro; en papel, muchas impresoras de oficina descartan
+los fondos y el texto blanco saldría sobre blanco. Se conserva la regla que marca la
+división, y los distintivos de las fichas no se imprimen.
+
+El reporte tiene **un solo tema, claro**. No hay modo oscuro: es una herramienta de
+escritorio que además se imprime, y un segundo tema sería otro juego de contrastes que
+mantener y volver a medir.
 
 Toda la tipografía es **Arial**. Conviene saber por qué eso funciona aquí: los dígitos
 de Arial tienen ancho uniforme, así que las columnas numéricas quedan alineadas sin
@@ -1538,7 +1615,14 @@ dividía por cero.
    aplazó a propósito porque cambia el precio de entrada, que es la cifra que se concilia
    contra el proveedor. Está medido en «Lo que queda de brecha entre la entrada y la
    salida».
-8. **Las rentabilidades esperadas de IPC e IBR están en confirmación.** Las convenciones
+8. **La tasa de salida de IPC lee un solo punto de la senda**, el de T+h, y lo aplica a
+   toda la vida que le queda al papel. Con sendas que convergen, los nodos largos caen a
+   90 y 180 días hasta volverse negativos: −10,79 % a 36 meses en el caso medido. La
+   corrección propuesta —descontar período a período, como ya hace IBR— lo deja plano en
+   10,92 %. Está medido en «Pendiente: la tasa de salida lee un solo punto de la senda» y
+   **no se ha aplicado**: es convención de negocio.
+
+9. **Las rentabilidades esperadas de IPC e IBR están en confirmación.** Las convenciones
    de las dos secciones anteriores son las acordadas hasta hoy y pueden ajustarse; el
    README es el sitio donde queda constancia de cuál rige en cada momento.
 
