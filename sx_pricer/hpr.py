@@ -241,6 +241,37 @@ def _valor_presente(flujos, desde: dt.date, tasa: float) -> float:
     return sum(fl * (1 + tasa) ** (-((f - desde).days) / 365.0) for f, fl, _ in flujos)
 
 
+def _valor_presente_ipc(flujos, desde: dt.date, margen: float) -> float:
+    """Precio en `desde` de los flujos de IPC, descontando tramo a tramo.
+
+    Solo se usa para **V₁**, y por la misma razón que en IBR: cada tramo se descuenta
+    con **el mismo IPC que armó el cupón que lo cierra** —el de tres meses antes de
+    ese pago— más el margen real.
+
+    Antes se descontaba todo a una sola tasa, recompuesta con el IPC de un **único
+    punto** de la senda, el del día de la venta. Con una senda plana da igual, pero
+    las sendas reales de IPC convergen —arrancan altas y bajan—, y entonces ese punto
+    sigue siendo alto mientras el papel va a vivir una inflación media mucho menor: un
+    nodo de 36 meses se descontaba al 7,3 % cuando su propia senda decía 5,2 %. La
+    tasa de salida quedaba muy por encima de la de entrada, el castigo se multiplicaba
+    por la duración y los nodos largos llegaban a rendir −10,79 % a 90 días.
+
+    Leyendo la senda entera —la misma que ya arma los cupones— el HPR se queda plano
+    en todos los plazos y clavado en la tasa de entrada. Es el invariante 6: el cupón
+    y su descuento comparten el índice.
+
+    La base sigue siendo ACT/365, como en el resto de IPC; lo que cambia es que la
+    tasa deja de ser una sola.
+    """
+    acumulado, total, anterior = 1.0, 0.0, desde
+    for fecha, flujo, indice in flujos:
+        tasa = (1 + margen) * (1 + indice) - 1
+        acumulado *= (1 + tasa) ** (-((fecha - anterior).days) / 365.0)
+        total += acumulado * flujo
+        anterior = fecha
+    return total
+
+
 def _valor_presente_previa(flujos, desde: dt.date, margen: float,
                            pagos: int = 12) -> float:
     """Precio de un flotante IBR en `desde`, descontando período a período.
@@ -340,6 +371,11 @@ def calcular(*, tipo: str, fecha_val: dt.date, vencimiento: dt.date, tir: float,
             # salida que reportar: hay una por período.
             tasa_sal = None
             v1 = 100 * _valor_presente_previa(resto, salida, margen + delta, pagos)
+        elif tipo == "ipc":
+            # Lo mismo en IPC: cada tramo con el IPC que armó su cupón. Ver
+            # _valor_presente_ipc.
+            tasa_sal = None
+            v1 = 100 * _valor_presente_ipc(resto, salida, margen + delta)
         else:
             tasa_sal = tasa_descuento(tipo, tir + delta, margen + delta, indice_salida)
             v1 = 100 * _valor_presente(resto, salida, tasa_sal)

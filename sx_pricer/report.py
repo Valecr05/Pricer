@@ -673,6 +673,19 @@ function rentabilidad(D, opciones){
     }
     return total;
   };
+  // Lo mismo en IPC: cada tramo se descuenta con el IPC que armo el cupon que lo
+  // cierra, no con un unico punto de la senda. La base sigue siendo ACT/365; lo que
+  // cambia es que la tasa deja de ser una sola.
+  var vpresIpc = function(lista, desde, margen){
+    var acum = 1, total = 0, ant = desde;
+    for(var i = 0; i < lista.length; i++){
+      var tasa = (1 + margen) * (1 + lista[i][2]) - 1;
+      acum *= Math.pow(1 + tasa, -diasEntre(ant, lista[i][0]) / 365);
+      total += acum * lista[i][1];
+      ant = lista[i][0];
+    }
+    return total;
+  };
 
   // el precio de entrada: convencion del proveedor, distinta en cada indice
   var flujosV0, tasaEnt;
@@ -709,6 +722,9 @@ function rentabilidad(D, opciones){
       // No queda una sola tasa de salida que reportar: hay una por periodo.
       tasaSal = null;
       V1 = 100 * vpresPrevia(resto, salida, opciones.margen + delta);
+    } else if(tipo === 'ipc'){
+      tasaSal = null;
+      V1 = 100 * vpresIpc(resto, salida, opciones.margen + delta);
     } else {
       tasaSal = tasaDescuento(tipo, opciones.tir + delta, opciones.margen + delta, vs[0]);
       V1 = 100 * vpres(resto, salida, tasaSal);
