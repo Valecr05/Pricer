@@ -1574,8 +1574,10 @@ function tablaHpr(datos, indice, titulo, subtitulo){
       return '<button type="button" class="tg" data-hpr-h="' + x.i + '" aria-pressed="' +
         (x.i === HPR.horizonte) + '">' + esc(x.et) + '</button>';
     }).join('') + '</div>';
+  // El titulo es fijo: cual de los tres horizontes se esta viendo ya lo dicen los
+  // botones de al lado. `titulo` se sigue usando para el nombre del archivo Excel.
   return '<div class="card"><div class="card-hd">' + dist('reloj') +
-    '<h3>' + esc(titulo) + '</h3>' + selH +
+    '<h3>Detalle de rentabilidades</h3>' + selH +
     '<span class="pill n">' + esc(subtitulo) + '</span>' +
     '<span class="meta">' + datos.filas.length + ' rangos</span>' +
     // el nombre de una hoja de Excel no pasa de 31 caracteres, asi que «Horizonte 90
