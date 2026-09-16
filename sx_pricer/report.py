@@ -977,8 +977,7 @@ function renderBloques(){
       '<h3>Qué se está viendo</h3>' + selBloque + selFamilia +
       '<span class="meta">' + esc(filtro) + '</span></div></div>' +
     '<div class="card"><div class="card-hd">' + dist('barras') +
-      '<h3>Resumen</h3>' +
-      '<span class="pill n">' + esc(b.label) + ' · ' + esc(fam) + '</span>' +
+      '<h3>' + esc(b.label) + ' · ' + esc(fam) + '</h3>' +
       (conmuta ? conmutador(gid, hayMargen, motivoMargen, serieDeBloque(b),
                             b.indexado ? 'Tasa' : 'TIR') : '') +
       '<span class="meta">' + conDato + ' nodos con dato</span>' +
