@@ -1619,11 +1619,13 @@ function renderTablasHpr(){
   var sub = HPR.tipo === 'fs' ? 'sin escenario'
             : HPR.escenario + (HPR.delta ? ' · Δ ' + bps(HPR.delta, 0) + ' pb' : '');
   if(HPR.tipo === 'fs' && HPR.delta) sub += ' · Δ ' + bps(HPR.delta, 0) + ' pb';
-  // Una sola tabla de detalle, la del horizonte elegido arriba. Las tres apiladas
-  // son mas de cien filas de scroll para ver la ultima.
-  var h = HORIZONTES_HPR[HPR.horizonte];
+  // Las tres tablas de detalle salen siempre. El segmentado de horizonte de la
+  // cabecera del resumen mueve SOLO la fila de rentabilidad de esa tabla.
   $('hpr-tablas').innerHTML =
-    tablaResumenHpr(datos) + tablaHpr(datos, h.i, h.titulo, sub);
+    tablaResumenHpr(datos) +
+    HORIZONTES_HPR.map(function(h){
+      return tablaHpr(datos, h.i, h.titulo, sub);
+    }).join('');
   [].forEach.call($('hpr-tablas').querySelectorAll('[data-hpr-h]'), function(b){
     b.onclick = function(){ HPR.horizonte = +b.dataset.hprH; renderTablasHpr(); };
   });
