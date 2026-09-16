@@ -171,7 +171,9 @@ h3{font-size:14px;font-weight:700;letter-spacing:.01em;margin:0}
 .tg[disabled]:hover{color:var(--tenue)}
 td.sincurva{color:var(--alerta);font-size:10.5px;letter-spacing:.04em}
 td.alvenc{color:var(--alerta)}
-td.alvenc small{font-size:9px;letter-spacing:.04em;margin-left:5px}
+/* la marca «(al venc.)» tambien aparece en la tabla de resumen, donde la celda no
+   lleva la clase: la regla va sobre cualquier small de celda */
+td small{font-size:9px;letter-spacing:.04em;margin-left:5px;color:var(--alerta)}
 td .extrap{color:var(--alerta);margin-left:4px;font-weight:700}
 .controles{display:flex;flex-wrap:wrap;gap:10px 24px;align-items:center;
   background:var(--blanco);border:1px solid var(--regla);border-radius:var(--radio);
@@ -975,7 +977,8 @@ function renderBloques(){
       '<h3>Qué se está viendo</h3>' + selBloque + selFamilia +
       '<span class="meta">' + esc(filtro) + '</span></div></div>' +
     '<div class="card"><div class="card-hd">' + dist('barras') +
-      '<h3>' + esc(b.label) + ' · ' + esc(fam) + '</h3>' +
+      '<h3>Resumen</h3>' +
+      '<span class="pill n">' + esc(b.label) + ' · ' + esc(fam) + '</span>' +
       (conmuta ? conmutador(gid, hayMargen, motivoMargen, serieDeBloque(b),
                             b.indexado ? 'Tasa' : 'TIR') : '') +
       '<span class="meta">' + conDato + ' nodos con dato</span>' +
@@ -1451,7 +1454,15 @@ function cablearVistas(){
 }
 
 // ---------- rentabilidades esperadas ----------
-var HPR = { tipo: 'fs', escenario: 'Base', delta: 0 };
+var HPR = { tipo: 'fs', escenario: 'Base', delta: 0, horizonte: 0 };
+
+// Los tres horizontes, en el orden en que los devuelve rentabilidad(): 90 dias,
+// 180 dias y al vencimiento.
+var HORIZONTES_HPR = [
+  { i: 0, et: '90 días',     titulo: 'Horizonte 90 días' },
+  { i: 1, et: '180 días',    titulo: 'Horizonte 180 días' },
+  { i: 2, et: 'Vencimiento', titulo: 'Al vencimiento' }
+];
 
 function bloquePorTipo(id){
   return D.bloques.filter(function(b){ return b.id === id; })[0];
@@ -1608,11 +1619,14 @@ function renderTablasHpr(){
   var sub = HPR.tipo === 'fs' ? 'sin escenario'
             : HPR.escenario + (HPR.delta ? ' · Δ ' + bps(HPR.delta, 0) + ' pb' : '');
   if(HPR.tipo === 'fs' && HPR.delta) sub += ' · Δ ' + bps(HPR.delta, 0) + ' pb';
+  // Una sola tabla de detalle, la del horizonte elegido arriba. Las tres apiladas
+  // son mas de cien filas de scroll para ver la ultima.
+  var h = HORIZONTES_HPR[HPR.horizonte];
   $('hpr-tablas').innerHTML =
-    tablaResumenHpr(datos) +
-    tablaHpr(datos, 0, 'Horizonte 90 días', sub) +
-    tablaHpr(datos, 1, 'Horizonte 180 días', sub) +
-    tablaHpr(datos, 2, 'Al vencimiento', sub);
+    tablaResumenHpr(datos) + tablaHpr(datos, h.i, h.titulo, sub);
+  [].forEach.call($('hpr-tablas').querySelectorAll('[data-hpr-h]'), function(b){
+    b.onclick = function(){ HPR.horizonte = +b.dataset.hprH; renderTablasHpr(); };
+  });
 }
 
 // Los cinco nodos del resumen, por su posicion en la rejilla mensual. El nodo `i`
@@ -1632,13 +1646,7 @@ function tablaResumenHpr(datos){
   if(!cols.length) return '';
 
   var celda = function(d, f){ return '<td>' + (d ? f(d) : SX.VACIO) + '</td>'; };
-  var hpr = function(k){
-    return function(d){
-      var r = d.res[k];
-      if(r.hpr === null || !isFinite(r.hpr)) return SX.VACIO;
-      return pct(r.hpr) + (r.alVencimiento ? '<small>(al venc.)</small>' : '');
-    };
-  };
+  var h = HORIZONTES_HPR[HPR.horizonte];
   var filas = [
     ['Vencimiento',            function(d){ return esc(d.venc); }],
     ['Días al vencimiento',    function(d){ return fmt(SX.diasEntre(S.t, d.venc), 0); }],
@@ -1646,9 +1654,11 @@ function tablaResumenHpr(datos){
     ['Tasa (T)',               function(d){ return pct(d.fila.brutaT); }],
     ['Margen',                 function(d){ return HPR.tipo === 'fs' ? SX.VACIO
                                                                      : pct(d.margen); }],
-    ['Rentabilidad 90 días',   hpr(0)],
-    ['Rentabilidad 180 días',  hpr(1)],
-    ['Al vencimiento',         hpr(2)]
+    ['Rentabilidad · ' + h.et, function(d){
+        var r = d.res[h.i];
+        if(r.hpr === null || !isFinite(r.hpr)) return SX.VACIO;
+        return pct(r.hpr) + (r.alVencimiento ? '<small>(al venc.)</small>' : '');
+      }]
   ];
 
   var cab = '<tr><th>Indicador</th>' + cols.map(function(c){
@@ -1658,10 +1668,16 @@ function tablaResumenHpr(datos){
       cols.map(function(c){ return celda(porIndice[c.i], f[1]); }).join('') + '</tr>';
   }).join('');
 
+  var selH = '<div class="toggle" role="group" aria-label="Horizonte">' +
+    HORIZONTES_HPR.map(function(x){
+      return '<button type="button" class="tg" data-hpr-h="' + x.i + '" aria-pressed="' +
+        (x.i === HPR.horizonte) + '">' + esc(x.et) + '</button>';
+    }).join('') + '</div>';
   return '<div class="card"><div class="card-hd">' + dist('tabla') +
-    '<h3>Resumen</h3>' +
+    '<h3>Resumen</h3>' + selH +
     '<span class="meta">' + cols.length + ' de ' + RESUMEN_NODOS.length + ' plazos con dato</span>' +
-    botonXls('HPR ' + HPR.tipo.toUpperCase() + ' resumen ' + HPR.escenario) + '</div>' +
+    botonXls('HPR ' + HPR.tipo.toUpperCase() + ' resumen ' + h.et + ' ' + HPR.escenario) +
+    '</div>' +
     '<div class="tw"><table><thead>' + cab + '</thead><tbody>' + cuerpo +
     '</tbody></table></div></div>';
 }
