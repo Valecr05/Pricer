@@ -2059,3 +2059,30 @@ def test_el_boton_de_excel_produce_un_xlsx_que_abre_sin_avisos(tmp_path):
     # las dos filas de encabezado van en negrita y las de datos no
     assert hoja.cell(1, 1).font.bold and hoja.cell(2, 1).font.bold
     assert not hoja.cell(3, 1).font.bold
+
+
+def test_el_paquete_se_puede_ejecutar_con_m():
+    """`python -m sx_pricer` tiene que arrancar. Es como lo invoca correr.bat.
+
+    Necesita `sx_pricer/__main__.py`, un shim de dos líneas que es fácil perder al
+    copiar la carpeta: `cli.py` puede estar completo y el paquete importarse bien, y
+    aun así `-m sx_pricer` falla con «'sx_pricer' is a package and cannot be directly
+    executed». Ninguna otra prueba lo tocaba, porque todas llaman a las funciones por
+    dentro y nunca por la línea de comandos.
+    """
+    import subprocess
+    import sys
+
+    shim = RAIZ / "sx_pricer" / "__main__.py"
+    assert shim.exists(), "falta sx_pricer/__main__.py: `python -m sx_pricer` no arranca"
+
+    r = subprocess.run([sys.executable, "-m", "sx_pricer", "--help"],
+                       cwd=RAIZ, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "--archivos" in r.stdout and "--curvas" in r.stdout
+
+    # sin argumentos obligatorios sale por la puerta de uso, no por una excepción
+    r = subprocess.run([sys.executable, "-m", "sx_pricer"],
+                       cwd=RAIZ, capture_output=True, text=True)
+    assert r.returncode != 0
+    assert "Traceback" not in r.stderr

@@ -132,6 +132,9 @@ La ventana negra no se cierra: ahí queda el mensaje. Los casos frecuentes:
 | `El entorno virtual apunta a una version de Python que ya no esta` | actualizaste o reinstalaste Python; escribe `S` y lo recrea solo |
 | `Windows no encontro Python` | falta el paso 1, o no marcaste «Add python.exe to PATH» al instalarlo |
 | `No se pudieron instalar las librerias` | la red de la oficina bloqueó a `pip`; el mensaje de `pip` sale unas líneas más arriba |
+| `A la carpeta le falta sx_pricer\__main__.py` | la copia de la carpeta quedó incompleta; escribe `S` y lo rehace, pero trae la carpeta entera |
+| `La carpeta sx_pricer esta incompleta o corrupta` | faltan más archivos del paquete; hay que traer la carpeta otra vez |
+| `ERROR: no se genero el reporte` | el motivo lo imprimió el programa unas líneas más arriba |
 | `SALIDA tiene que ser la ruta de un ARCHIVO` | en `mis_rutas.bat` pusiste una carpeta y no un `.html` |
 | `No existe la carpeta de planos` | la ruta de `mis_rutas.bat` está mal escrita |
 | `Sin coincidencias para ...` | la ruta de planos del `.bat` está mal escrita |
@@ -185,6 +188,32 @@ rmdir /s /q .venv
 py -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 ```
+
+#### Si la copia de la carpeta quedó incompleta
+
+```
+'sx_pricer' is a package and cannot be directly executed
+```
+
+`correr.bat` arranca el programa con `python -m sx_pricer`, y eso entra por
+`sx_pricer\__main__.py`, un **shim de dos líneas**:
+
+```python
+from .cli import main
+raise SystemExit(main())
+```
+
+Es el archivo más fácil de perder al copiar la carpeta a mano, y cuando falta, el resto
+del paquete puede estar entero: Python dice que `sx_pricer` es un paquete y no se puede
+ejecutar, sin decir qué archivo falta ni dónde.
+
+`correr.bat` lo comprueba antes de arrancar y se ofrece a escribirlo. Pero **si ese
+archivo falta, lo más probable es que falten otros**: conviene traer la carpeta entera de
+nuevo y conservar solo tu `mis_rutas.bat`.
+
+La prueba `test_el_paquete_se_puede_ejecutar_con_m` corre `python -m sx_pricer --help` de
+verdad, para que esto no se vuelva a escapar: todas las demás llaman a las funciones por
+dentro y ninguna pasaba por la línea de comandos.
 
 ### En macOS o Linux
 

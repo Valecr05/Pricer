@@ -120,6 +120,62 @@ exit /b 1
 
 :entorno_listo
 
+REM ===================================================================
+REM  El paquete, completo
+REM
+REM  `python -m sx_pricer` arranca por sx_pricer\__main__.py, un shim de dos
+REM  lineas. Es facil perderlo al copiar la carpeta, y cuando falta el resto
+REM  del paquete puede estar entero: Python responde "'sx_pricer' is a package
+REM  and cannot be directly executed", que no dice cual es el archivo ni donde.
+REM ===================================================================
+if not exist "sx_pricer\__main__.py" goto sin_shim
+.venv\Scripts\python -c "import sx_pricer.cli" >nul 2>&1
+if errorlevel 1 goto paquete_roto
+goto paquete_listo
+
+:sin_shim
+echo.
+echo A la carpeta le falta  sx_pricer\__main__.py, que es por donde arranca el
+echo programa. Son dos lineas y se pueden escribir aqui mismo.
+echo.
+echo Ojo: si falta ese archivo, lo mas probable es que la copia de la carpeta
+echo quedara incompleta. Aunque lo escribamos ahora, conviene traer la carpeta
+echo entera otra vez y quedarte solo con tu mis_rutas.bat.
+echo.
+set "RESP="
+set /p "RESP=Escribe S y pulsa Enter para escribirlo ahora, o N para salir: "
+if /i not "%RESP%"=="S" goto salir_sin_shim
+.venv\Scripts\python -c "open(r'sx_pricer\__main__.py','w').write('from .cli import main\nraise SystemExit(main())\n')"
+if not exist "sx_pricer\__main__.py" goto paquete_roto
+echo.
+echo Escrito. Sigo con la corrida.
+echo.
+.venv\Scripts\python -c "import sx_pricer.cli" >nul 2>&1
+if errorlevel 1 goto paquete_roto
+goto paquete_listo
+
+:salir_sin_shim
+echo.
+echo No se escribio nada. Trae la carpeta completa y vuelve a intentarlo.
+echo.
+pause
+exit /b 1
+
+:paquete_roto
+echo.
+echo La carpeta sx_pricer esta incompleta o corrupta: Python no la puede cargar.
+echo El detalle sale con este comando, en una ventana de comandos abierta aqui:
+echo.
+echo    .venv\Scripts\python -c "import sx_pricer.cli"
+echo.
+echo Lo normal es que la copia quedara a medias. Trae la carpeta entera otra vez
+echo y conserva solo tu mis_rutas.bat.
+echo.
+pause
+exit /b 1
+
+:paquete_listo
+
 if not exist "%PLANOS%" (
   echo.
   echo No existe la carpeta de planos indicada en mis_rutas.bat:
@@ -160,7 +216,10 @@ REM --rehacer y llama aqui, para no repetir todas las comprobaciones.
 set CODIGO=%ERRORLEVEL%
 echo.
 if %CODIGO%==0 echo Listo, sin novedades.
-if %CODIGO%==1 echo ERROR de uso: revisa las rutas en mis_rutas.bat.
+REM El codigo 1 lo devuelve el propio programa cuando no pudo generar el reporte,
+REM y el motivo ya salio impreso arriba. Antes esta linea decia "revisa las rutas",
+REM que mandaba a mirar mis_rutas.bat aunque el fallo fuera otro.
+if %CODIGO%==1 echo ERROR: no se genero el reporte. El motivo esta unas lineas mas arriba.
 if %CODIGO%==2 echo ATENCION: el reporte se genero, pero hay controles de integridad fallidos.
 if %CODIGO%==3 echo ATENCION: el reporte se genero, pero hay avisos de calidad de datos.
 echo.
