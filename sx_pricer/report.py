@@ -1453,14 +1453,14 @@ function cablearVistas(){
 }
 
 // ---------- rentabilidades esperadas ----------
-var HPR = { tipo: 'fs', escenario: 'Base', delta: 0 };
+var HPR = { tipo: 'fs', escenario: 'Base', delta: 0, horizonte: 0 };
 
 // Los tres horizontes, en el orden en que los devuelve rentabilidad(): 90 dias,
 // 180 dias y al vencimiento.
 var HORIZONTES_HPR = [
-  { i: 0, titulo: 'Horizonte 90 días' },
-  { i: 1, titulo: 'Horizonte 180 días' },
-  { i: 2, titulo: 'Al vencimiento' }
+  { i: 0, et: '90 días',     titulo: 'Horizonte 90 días' },
+  { i: 1, et: '180 días',    titulo: 'Horizonte 180 días' },
+  { i: 2, et: 'Vencimiento', titulo: 'Al vencimiento' }
 ];
 
 function bloquePorTipo(id){
@@ -1569,8 +1569,13 @@ function tablaHpr(datos, indice, titulo, subtitulo){
       '<td>' + (HPR.tipo === 'fs' ? SX.VACIO : pct(d.margen)) + '</td>' +
       celda + '</tr>';
   }).join('');
+  var selH = '<div class="toggle" role="group" aria-label="Horizonte">' +
+    HORIZONTES_HPR.map(function(x){
+      return '<button type="button" class="tg" data-hpr-h="' + x.i + '" aria-pressed="' +
+        (x.i === HPR.horizonte) + '">' + esc(x.et) + '</button>';
+    }).join('') + '</div>';
   return '<div class="card"><div class="card-hd">' + dist('reloj') +
-    '<h3>' + esc(titulo) + '</h3>' +
+    '<h3>' + esc(titulo) + '</h3>' + selH +
     '<span class="pill n">' + esc(subtitulo) + '</span>' +
     '<span class="meta">' + datos.filas.length + ' rangos</span>' +
     // el nombre de una hoja de Excel no pasa de 31 caracteres, asi que «Horizonte 90
@@ -1618,13 +1623,15 @@ function renderTablasHpr(){
   var sub = HPR.tipo === 'fs' ? 'sin escenario'
             : HPR.escenario + (HPR.delta ? ' · Δ ' + bps(HPR.delta, 0) + ' pb' : '');
   if(HPR.tipo === 'fs' && HPR.delta) sub += ' · Δ ' + bps(HPR.delta, 0) + ' pb';
-  // El resumen trae los tres horizontes en sus filas; debajo, las tres tablas de
-  // detalle, una por horizonte.
+  // El resumen trae los tres horizontes en sus filas. La tabla de detalle muestra
+  // uno a la vez, el que elijan sus propios botones: las tres apiladas son mas de
+  // cien filas para llegar a la ultima.
+  var h = HORIZONTES_HPR[HPR.horizonte];
   $('hpr-tablas').innerHTML =
-    tablaResumenHpr(datos) +
-    HORIZONTES_HPR.map(function(h){
-      return tablaHpr(datos, h.i, h.titulo, sub);
-    }).join('');
+    tablaResumenHpr(datos) + tablaHpr(datos, h.i, h.titulo, sub);
+  [].forEach.call($('hpr-tablas').querySelectorAll('[data-hpr-h]'), function(b){
+    b.onclick = function(){ HPR.horizonte = +b.dataset.hprH; renderTablasHpr(); };
+  });
 }
 
 // Los cinco nodos del resumen, por su posicion en la rejilla mensual. El nodo `i`
