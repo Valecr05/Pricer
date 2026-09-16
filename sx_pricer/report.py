@@ -47,67 +47,81 @@ CSS = """
    Lo único que sigue en monoespaciada es el registro crudo de «la cinta»: ahí el
    ancho fijo no es estética, es lo que hace que los cortes de campo sean ciertos. */
 :root{
-  --fondo:#F2F5F8; --blanco:#FFF;
-  --marca:#0B2E4F;        /* azul corporativo: cabecera y encabezados de tabla */
-  --marca-media:#16456E; --tinte:#EDF3F8; --zebra:#F7FAFC;
-  --regla:#D7DFE7; --regla-suave:#EAEFF4;
+  --fondo:#F1F4F8; --blanco:#FFF;
+  --marca:#0D2B45;        /* azul corporativo: cabecera y encabezados de tabla */
+  --marca-alta:#1B4A6B; --marca-media:#16456E;
+  --tinte:#EDF3F9; --tinte-verde:#EAF6EF; --zebra:#F8FAFC; --ancla:#F6F9FC;
+  --regla:#DCE3EB; --regla-suave:#EDF1F6;
   --tinta:#0F2942; --tinta-media:#2C4863; --tenue:#61798F; --apagado:#9FB3C4;
-  --acento:#0E8A4A;       /* verde corporativo: destacados y serie T */
+  --verde-vivo:#2ECC71;   /* solo sobre el azul de la cabecera: 6,90:1 */
+  --acento:#0B7A40;       /* verde de texto sobre blanco: 5,42:1, cumple AA */
+  --acento-linea:#0E8A4A; /* el mismo verde, para la serie: basta con 3:1 */
   --azul:#1A5FA8;         /* la otra serie; validado contra el verde para daltonismo */
-  --alza:#C0392B; --baja:#0E7C42; --alerta:#B0710A;
-  --ok-fondo:#E6F4EC; --ok-borde:#A8D5BC;
+  --alza:#C0392B; --baja:#0B7A40; --alerta:#B0710A;
+  --ok-fondo:#EAF6EF; --ok-borde:#A8D5BC;
   --mal-fondo:#FBEAE8; --mal-borde:#EDB6AF;
   --av-fondo:#FDF4E4; --av-borde:#E4C894;
   --top-h:96px;        /* se remide en tiempo de ejecucion: ver ajustarAlto() */
   --sans:Arial,"Helvetica Neue",Helvetica,sans-serif;
   --mono:Consolas,"SF Mono",Menlo,"DejaVu Sans Mono",monospace;
-  --sombra:0 1px 3px rgba(11,41,66,.07),0 1px 2px rgba(11,41,66,.04);
-  --sombra-alta:0 4px 14px rgba(11,41,66,.10),0 1px 3px rgba(11,41,66,.06);
-  --radio:10px;
+  --sombra:0 1px 3px rgba(13,43,69,.07),0 1px 2px rgba(13,43,69,.04);
+  --sombra-alta:0 6px 22px rgba(13,43,69,.10),0 2px 6px rgba(13,43,69,.06);
+  --radio:14px; --radio-chico:9px;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:var(--top-h)}
 body{margin:0;background:var(--fondo);color:var(--tinta);font-family:var(--sans);
   font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
-.wrap{max-width:1560px;margin:0 auto;padding:0 28px 96px}
+.wrap{max-width:1560px;margin:0 auto;padding:0 22px 96px}
 
-/* --- barra superior --- */
-.top{position:sticky;top:0;z-index:50;color:#FFF;
-  background:linear-gradient(100deg,#08233D 0%,var(--marca) 45%,#17517F 100%);
-  box-shadow:0 2px 10px rgba(11,41,66,.18)}
-.top-in{max-width:1560px;margin:0 auto;padding:15px 28px 0;display:flex;
-  flex-direction:column;align-items:center;gap:11px}
-.top h1{font-size:15px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;
-  margin:0;text-align:center;color:#FFF}
-/* el filete verde es la firma de la marca: separa cabecera de contenido */
-.top h1::after{content:"";display:block;width:46px;height:3px;border-radius:2px;
-  background:var(--acento);margin:9px auto 0}
+/* --- el bloque de arriba: dos tarjetas unidas, flotando sobre el fondo --- */
+/* `.top` solo aporta el fondo y el pegado; la tarjeta redondeada es `.top-in`, y
+   por eso el relleno lateral va aqui y no en el hijo: asi la sombra se ve entera. */
+.top{position:sticky;top:0;z-index:50;background:var(--fondo);padding:14px 22px 10px}
+.top-in{max-width:1516px;margin:0 auto;border-radius:var(--radio);overflow:hidden;
+  box-shadow:var(--sombra-alta)}
+.hero{background:linear-gradient(103deg,#08233D 0%,var(--marca) 46%,var(--marca-alta) 100%);
+  padding:17px 22px 0;color:#FFF}
+.hero-in{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.top h1{font-size:21px;font-weight:700;letter-spacing:-.01em;margin:0;line-height:1.15;
+  color:#FFF}
+.hero .sub{margin:1px 0 0;font-size:17px;font-weight:700;color:var(--verde-vivo);
+  letter-spacing:-.01em;line-height:1.2}
+.corte{margin-left:auto;background:var(--blanco);color:var(--tinta);border-radius:8px;
+  padding:7px 14px;font-size:12px;font-weight:700;white-space:nowrap;
+  font-variant-numeric:tabular-nums;box-shadow:0 1px 2px rgba(0,0,0,.18)}
 
-.tabs{display:flex;gap:2px;justify-content:center;flex-wrap:wrap}
-.tab{appearance:none;background:transparent;border:0;border-bottom:2px solid transparent;
-  color:rgba(255,255,255,.72);font-family:inherit;font-size:12px;font-weight:400;
-  letter-spacing:.1em;text-transform:uppercase;padding:7px 14px 6px;cursor:pointer;
-  white-space:nowrap;transition:color .12s,border-color .12s}
-.tab:hover{color:#FFF}
-.tab:focus-visible{outline:2px solid var(--acento);outline-offset:2px;border-radius:2px}
-.tab[aria-selected="true"]{color:#FFF;font-weight:700;border-bottom-color:var(--acento)}
+/* Fichas de pestania: la activa en blanco y las otras translucidas, con su conteo
+   debajo. Es mas ancho que un subrayado, pero dice de que tamanio es cada pestania
+   antes de entrar. */
+.tabs{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0 0;padding:0 0 14px}
+.tab{appearance:none;font-family:inherit;text-align:left;cursor:pointer;
+  border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);
+  color:rgba(255,255,255,.78);border-radius:var(--radio-chico);padding:9px 16px;
+  transition:background .14s,color .14s,border-color .14s}
+.tab:hover{background:rgba(255,255,255,.14);color:#FFF}
+.tab b{display:block;font-size:13px;font-weight:700}
+.tab small{display:block;font-size:11px;opacity:.72;margin-top:1px}
+.tab[aria-selected="true"]{background:var(--blanco);color:var(--tinta);
+  border-color:var(--blanco);box-shadow:0 2px 8px rgba(0,0,0,.16)}
+.tab[aria-selected="true"] small{color:var(--acento);opacity:1;font-weight:700}
+.tab:focus-visible{outline:2px solid var(--verde-vivo);outline-offset:2px}
 .panel[hidden]{display:none}
 .panel>section:first-child,.panel>div:first-child>section:first-child{margin-top:34px}
 
 /* --- barra de parámetros --- */
-.barra{background:var(--blanco);border-top:1px solid rgba(255,255,255,.14);
-  border-bottom:1px solid var(--regla);box-shadow:var(--sombra)}
-.barra-in{max-width:1560px;margin:0 auto;padding:9px 28px;display:flex;flex-wrap:wrap;
-  gap:8px 22px;align-items:center;font-size:12px}
-.barra label{display:inline-flex;align-items:center;gap:7px;color:var(--tinta-media);
-  letter-spacing:.12em;text-transform:uppercase;font-size:10px;font-weight:700}
+.barra{background:var(--blanco)}
+.barra-in{padding:11px 20px;display:flex;flex-wrap:wrap;gap:9px 22px;align-items:center;
+  font-size:12px}
+.barra label{display:inline-flex;align-items:center;gap:8px;color:var(--tenue);
+  letter-spacing:.11em;text-transform:uppercase;font-size:10px;font-weight:700}
 .barra select,.barra input{font-family:inherit;font-size:13px;font-weight:400;
-  font-variant-numeric:tabular-nums;padding:4px 8px;background:var(--blanco);
-  color:var(--tinta);border:1px solid var(--regla);border-radius:3px;letter-spacing:0}
-.barra input{width:72px;text-align:right}
-.barra select{min-width:116px}
-.barra select:focus,.barra input:focus{outline:2px solid var(--acento);outline-offset:1px;
-  border-color:var(--acento)}
+  font-variant-numeric:tabular-nums;padding:6px 10px;background:var(--blanco);
+  color:var(--tinta);border:1px solid var(--regla);border-radius:8px;letter-spacing:0}
+.barra input{width:76px;text-align:right}
+.barra select{min-width:122px}
+.barra select:focus,.barra input:focus{outline:2px solid var(--azul);outline-offset:1px;
+  border-color:var(--azul)}
 .barra .u{color:var(--tinta-media);font-weight:400}
 .barra .aviso{color:var(--alza);font-size:11px;font-weight:700;text-transform:none;letter-spacing:0}
 
@@ -122,32 +136,37 @@ h3{font-size:14px;font-weight:700;letter-spacing:.01em;margin:0}
   margin-bottom:20px;overflow:hidden;box-shadow:var(--sombra);
   transition:box-shadow .15s}
 .card:hover{box-shadow:var(--sombra-alta)}
-.card-hd{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:13px 18px;
-  border-bottom:1px solid var(--regla-suave);background:var(--tinte)}
-/* Un punto de color antes del titulo, como los distintivos de la referencia: da
-   un ancla visual a cada tarjeta sin gastar un icono. */
-.card-hd h3::before{content:"";display:inline-block;width:8px;height:8px;
-  border-radius:50%;background:var(--acento);margin-right:9px;vertical-align:middle}
+/* Franja tintada con distintivo circular: verde para las tarjetas de datos y azul
+   para las de control, que es lo que separa de un vistazo una cosa de la otra. */
+.card-hd{display:flex;flex-wrap:wrap;gap:11px;align-items:center;padding:12px 18px;
+  border-bottom:1px solid var(--regla-suave);background:var(--tinte-verde)}
+.card-hd.azul{background:var(--tinte)}
+.card-hd h3{color:var(--marca)}
+.card-hd .dist{flex:0 0 30px;height:30px;border-radius:50%;display:flex;
+  align-items:center;justify-content:center;background:var(--acento);color:#FFF}
+.card-hd.azul .dist{background:var(--marca)}
 .card-hd .meta{margin-left:auto;font-size:11px;color:var(--tenue);letter-spacing:.02em}
 /* El boton de descarga va siempre al extremo derecho de la cabecera. Si la tarjeta
    trae `.meta`, esta ya empuja con margin-left:auto y el boton queda detras; si no,
    el propio boton empuja. */
 .xls{margin-left:auto;appearance:none;background:var(--blanco);border:1px solid var(--regla);
-  border-radius:3px;font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--tenue);padding:4px 10px;cursor:pointer;
-  transition:background .12s,color .12s,border-color .12s}
+  border-radius:8px;font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--tinta-media);padding:6px 12px;cursor:pointer;
+  transition:background .14s,color .14s,border-color .14s}
 .card-hd .meta ~ .xls{margin-left:0}
-.xls:hover{background:var(--tinte);color:var(--tinta);border-color:var(--marca)}
-.xls:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+.xls:hover{background:var(--marca);color:#FFF;border-color:var(--marca)}
+.xls:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
 .xls[disabled]{opacity:.45;cursor:default}
-.toggle{display:inline-flex;border:1px solid var(--regla);border-radius:3px;overflow:hidden}
-.tg{appearance:none;background:var(--blanco);border:0;border-left:1px solid var(--regla);
-  font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--tenue);padding:4px 11px;cursor:pointer;transition:background .12s,color .12s}
-.tg:first-child{border-left:0}
-.tg:hover{color:var(--acento)}
-.tg[aria-pressed="true"]{background:var(--marca);color:var(--tinta)}
-.tg:focus-visible{outline:2px solid var(--acento);outline-offset:-2px}
+/* Control segmentado: el activo es una pastilla azul dentro de un carril tenue. */
+.toggle{display:inline-flex;background:var(--tinte);border:1px solid var(--regla);
+  border-radius:var(--radio-chico);padding:2px;gap:2px}
+.tg{appearance:none;background:transparent;border:0;border-radius:7px;font-family:inherit;
+  font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--tenue);padding:6px 13px;cursor:pointer;white-space:nowrap;
+  transition:background .14s,color .14s}
+.tg:hover{color:var(--tinta)}
+.tg[aria-pressed="true"]{background:var(--marca);color:#FFF;box-shadow:var(--sombra)}
+.tg:focus-visible{outline:2px solid var(--azul);outline-offset:1px}
 .tg[disabled]{opacity:.4;cursor:default}
 .tg[disabled]:hover{color:var(--tenue)}
 td.sincurva{color:var(--alerta);font-size:10.5px;letter-spacing:.04em}
@@ -155,14 +174,14 @@ td.alvenc{color:var(--alerta)}
 td.alvenc small{font-size:9px;letter-spacing:.04em;margin-left:5px}
 td .extrap{color:var(--alerta);margin-left:4px;font-weight:700}
 .controles{display:flex;flex-wrap:wrap;gap:10px 24px;align-items:center;
-  background:var(--tinte);border:1px solid var(--regla);border-radius:5px;
-  padding:12px 18px;margin:0 0 22px}
+  background:var(--blanco);border:1px solid var(--regla);border-radius:var(--radio);
+  padding:13px 18px;margin:0 0 20px;box-shadow:var(--sombra)}
 .controles label{display:inline-flex;align-items:center;gap:8px;font-size:10px;
-  font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--tinta-media)}
+  font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--tenue)}
 .controles input{font-family:inherit;font-size:13px;font-variant-numeric:tabular-nums;
-  width:80px;padding:4px 8px;text-align:right;background:var(--blanco);color:var(--tinta);
-  border:1px solid var(--regla);border-radius:3px;letter-spacing:0}
-.controles input:focus{outline:2px solid var(--acento);outline-offset:1px;border-color:var(--acento)}
+  width:84px;padding:6px 10px;text-align:right;background:var(--blanco);color:var(--tinta);
+  border:1px solid var(--regla);border-radius:8px;letter-spacing:0}
+.controles input:focus{outline:2px solid var(--azul);outline-offset:1px;border-color:var(--azul)}
 .controles .u{font-weight:400;color:var(--tenue);letter-spacing:0;text-transform:none}
 .controles .pista{font-size:11px;font-weight:400;letter-spacing:0;text-transform:none;
   color:var(--tenue);max-width:52ch;line-height:1.45}
@@ -198,24 +217,27 @@ td .extrap{color:var(--alerta);margin-left:4px;font-weight:700}
   padding:15px 17px;box-shadow:var(--sombra);display:flex;gap:13px;align-items:flex-start;
   transition:box-shadow .15s}
 .tile:hover{box-shadow:var(--sombra-alta)}
-.tile .ico{flex:0 0 38px;height:38px;border-radius:50%;display:flex;align-items:center;
-  justify-content:center;font-size:17px;line-height:1;background:var(--tinte);margin-top:2px}
-.tile.ok .ico{background:var(--ok-fondo)} .tile.mal .ico{background:var(--mal-fondo)}
-.tile.av .ico{background:var(--av-fondo)}
+.tile .ico{flex:0 0 38px;height:38px;border-radius:12px;display:flex;align-items:center;
+  justify-content:center;line-height:1;background:var(--tinte);color:var(--marca);margin-top:2px}
+.tile.ok .ico{background:var(--ok-fondo);color:var(--acento)}
+.tile.mal .ico{background:var(--mal-fondo);color:var(--alza)}
+.tile.av .ico{background:var(--av-fondo);color:var(--alerta)}
 .tile .txt{min-width:0}
 .tile .k{font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
   color:var(--tenue);line-height:1.35}
 .tile .v{font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px;
-  letter-spacing:-.02em;line-height:1.15;color:var(--marca)}
-.tile .s{font-size:12px;color:var(--tenue);margin-top:2px}
+  letter-spacing:-.025em;line-height:1.15;color:var(--marca)}
+.tile .s{font-size:12px;color:var(--tenue);margin-top:1px}
 
 /* --- píldoras --- */
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
-  letter-spacing:.05em;padding:3px 10px;border-radius:3px;border:1px solid;text-transform:uppercase}
+  letter-spacing:.04em;padding:3px 11px;border-radius:99px;border:1px solid;
+  text-transform:uppercase}
 .pill.ok{color:var(--baja);border-color:var(--ok-borde);background:var(--ok-fondo)}
 .pill.mal{color:var(--alza);border-color:var(--mal-borde);background:var(--mal-fondo)}
 .pill.av{color:var(--alerta);border-color:var(--av-borde);background:var(--av-fondo)}
-.pill.n{color:var(--tenue);border-color:var(--regla);background:var(--tinte);font-weight:400}
+.pill.n{color:var(--tinta-media);border-color:var(--regla);background:var(--blanco);
+  font-weight:400}
 
 /* --- tablas --- */
 /* Fijar un eje del overflow convierte esto en un contexto de scroll, y contra ese
@@ -231,28 +253,50 @@ table{border-collapse:collapse;width:100%;font-size:12px;font-variant-numeric:ta
    agrupacion se declara static a proposito: si las dos fueran pegajosas al mismo
    top:0 se superpondrian entre si. */
 thead th{background:var(--marca);text-align:right;
-  padding:9px 11px;font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  padding:9px 11px;font-weight:700;font-size:10px;letter-spacing:.09em;text-transform:uppercase;
   color:#FFF;border-bottom:1px solid var(--marca);white-space:nowrap}
 thead th:not(.grupo){position:sticky;top:0;z-index:2}
 thead th:first-child,tbody td:first-child{text-align:left}
-/* La fila de agrupacion va un tono mas claro para que se lea como el nivel de
-   arriba y no como otra fila de columnas. */
-thead th.grupo{text-align:center;background:var(--marca-media);color:rgba(255,255,255,.92);
-  border-bottom:1px solid rgba(255,255,255,.18);position:static;font-weight:400}
-tbody td{padding:6px 11px;text-align:right;border-bottom:1px solid var(--regla-suave);
+/* La fila de agrupacion va en gris claro con texto gris: pesa menos que el azul y
+   se lee como el nivel de arriba, no como otra fila de columnas. */
+thead th.grupo{text-align:center;background:#EDF1F6;color:var(--tenue);
+  border-bottom:1px solid var(--regla);position:static;letter-spacing:.12em}
+tbody td{padding:7px 11px;text-align:right;border-bottom:1px solid var(--regla-suave);
   white-space:nowrap}
 tbody tr:nth-child(even) td{background:var(--zebra)}
 tbody tr:hover td{background:var(--tinte)}
 tbody tr.vacia td{color:var(--apagado)}
+
+/* La primera columna se congela a la izquierda. La tabla de IBR tiene 19 columnas y
+   se desplaza en horizontal: sin esto, la ventana de vencimientos se sale de vista y
+   deja de saberse de que rango es cada fila. El fondo tiene que ser opaco —las filas
+   pares y el hover incluidos— porque las demas celdas pasan por debajo. */
+thead th:first-child{position:sticky;left:0;z-index:3;background:var(--marca)}
+thead th.grupo:first-child{z-index:1;background:#EDF1F6}
+tbody td:first-child{position:sticky;left:0;z-index:1;background:var(--ancla);
+  box-shadow:1px 0 0 var(--regla-suave)}
+tbody tr:nth-child(even) td:first-child{background:#F1F5F9}
+tbody tr:hover td:first-child{background:#E4ECF4}
+/* la segunda columna acompania en tono, pero no se congela: con 19 columnas dos
+   columnas fijas se comen media pantalla */
+tbody td.key{font-weight:700;color:var(--tinta)}
+tbody td:nth-child(2).key{background:var(--ancla)}
+tbody tr:nth-child(even) td:nth-child(2).key{background:#F1F5F9}
+tbody tr:hover td:nth-child(2).key{background:#E4ECF4}
 td.alza,.v.alza{color:var(--alza);font-weight:700}
 td.baja,.v.baja{color:var(--baja);font-weight:700}
 td.neutro,.v.neutro{color:var(--tenue)}
-td.key{font-weight:700}
+/* la unidad va pegada al numero, mas pequenia y sin peso: se lee como sufijo */
+td .ud{font-weight:400;font-size:10px;opacity:.72;margin-left:2px}
 td.ventana{font-variant-numeric:tabular-nums;color:var(--tinta-media)}
 .sep{border-left:1px solid var(--regla)}
-.nota-tabla{margin:0;padding:11px 18px 13px;border-top:1px solid var(--regla-suave);
-  background:var(--tinte);font-size:11.5px;color:var(--tinta-media);line-height:1.5}
-.nota-tabla b{color:var(--alerta)}
+/* Recuadro de aviso al pie: franja tintada con borde de color a la izquierda y la
+   primera frase en negrita como titular. */
+.nota-tabla{margin:0;padding:12px 18px 13px 15px;border-top:1px solid var(--regla-suave);
+  background:var(--av-fondo);border-left:4px solid var(--alerta);font-size:12px;
+  color:var(--tinta-media);line-height:1.5}
+.nota-tabla b{display:block;color:var(--marca);font-size:12.5px;margin-bottom:2px}
+.nota-tabla.ok{background:var(--tinte-verde);border-left-color:var(--acento)}
 
 /* --- calidad --- */
 .issue{background:var(--blanco);border:1px solid var(--regla);border-left:4px solid var(--tenue);
@@ -273,6 +317,7 @@ td.ventana{font-variant-numeric:tabular-nums;color:var(--tinta-media)}
 .chart .grid{stroke:var(--regla-suave);stroke-width:1}
 .chart .ax{stroke:var(--regla);stroke-width:1}
 .chart text{font-family:var(--sans);font-size:10px;fill:var(--tenue)}
+.chart text.dir{font-size:9.5px;font-weight:700;fill:var(--tinta-media)}
 .chart .lbl{fill:var(--acento);letter-spacing:.12em;text-transform:uppercase;font-size:9px;
   font-weight:700}
 .leyenda{display:flex;flex-wrap:wrap;gap:18px;padding:0 18px 14px;font-size:11px}
@@ -313,14 +358,21 @@ noscript p{background:var(--av-fondo);border:1px solid var(--av-borde);border-ra
      imprimir eso son planchas de tinta, y muchas impresoras de oficina descartan
      los fondos: el texto blanco saldria sobre blanco. Se invierten a tinta sobre
      papel, conservando la regla que marca la division. */
-  .top{background:#fff;color:var(--tinta);box-shadow:none;
-       border-bottom:2px solid var(--marca)}
-  .top h1{color:var(--tinta)}
+  .top{padding:0} .top-in{box-shadow:none;border-radius:0}
+  .hero{background:#fff;color:var(--tinta);padding-bottom:10px;
+        border-bottom:2px solid var(--marca)}
+  .top h1{color:var(--tinta)} .hero .sub{color:var(--acento)}
+  .corte{box-shadow:none;border:1px solid var(--regla)}
+  .tabs,.toggle,.xls{display:none}       /* nada de controles en papel */
   thead th{background:#fff;color:var(--tinta);border-bottom:1.5px solid var(--marca)}
   thead th.grupo{background:#fff;color:var(--tinta-media);
                  border-bottom:1px solid var(--regla)}
+  /* nada pegajoso al imprimir: la primera columna volveria a dibujarse en cada pagina */
+  thead th:first-child,tbody td:first-child{position:static;box-shadow:none}
   .tile .ico{display:none}               /* el distintivo no aporta en papel */
-  tbody tr:nth-child(even) td{background:#fff}
+  .card-hd,.card-hd.azul{background:#fff}
+  .card-hd .dist{display:none}
+  tbody tr:nth-child(even) td,tbody td:first-child,tbody td.key{background:#fff}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 """
@@ -348,6 +400,12 @@ function pct(v, dec){
 function bps(v, dec){
   if(v === null || v === undefined || !isFinite(v)) return VACIO;
   return (v > 0 ? '+' : '') + fmt(v, dec === undefined ? 1 : dec);
+}
+// El mismo numero con la unidad pegada, mas pequenia y sin peso, para las celdas de
+// tabla. En las graficas y en los titulos se usa bps() a secas.
+function bpsUd(v, dec){
+  if(v === null || v === undefined || !isFinite(v)) return VACIO;
+  return bps(v, dec) + '<span class="ud">pb</span>';
 }
 function clase(v){
   if(v === null || v === undefined || !isFinite(v)) return '';
@@ -683,7 +741,7 @@ function muestraCorta(filas, minTitulos){
   };
 }
 
-return { VACIO: VACIO, fmt: fmt, pct: pct, bps: bps, clase: clase, margen: margen,
+return { VACIO: VACIO, fmt: fmt, pct: pct, bps: bps, bpsUd: bpsUd, clase: clase, margen: margen,
          nodos: nodos, tes: tes, muestraCorta: muestraCorta,
          etiquetaMes: etiquetaMes, dia: dia, diasEntre: diasEntre,
          sumarDias: sumarDias, menosMeses: menosMeses,
@@ -708,7 +766,7 @@ var $ = function(id){ return document.getElementById(id); };
 var tip = document.createElement('div'); tip.className = 'tip'; document.body.appendChild(tip);
 function esc(s){ var d = document.createElement('div'); d.textContent = (s === null || s === undefined) ? '' : s; return d.innerHTML; }
 
-var S = { t: null, t1: null, ipcT: 0, ipcT1: 0, br: 0 };
+var S = { t: null, t1: null, ipcT: 0, ipcT1: 0, br: 0, bloque: 'fs', familia: 'CDT' };
 var ultimoValido = { t: null, t1: null };
 function rt(){ return D.porFecha[S.t]; }
 function rt1(){ return D.porFecha[S.t1]; }
@@ -737,13 +795,20 @@ var ICONOS = {
   flecha:     'M3 14l4-5 3 3 6-7M13 5h4v4',
   onda:       'M3 15l4-6 3 3 3-7 4 10',
   escudo:     'M10 3l6 2v5c0 4-3 6-6 7-3-1-6-3-6-7V5zM7 10l2 2 4-4',
-  alerta:     'M10 3l7 13H3zM10 8v4M10 14.5v.01'
+  alerta:     'M10 3l7 13H3zM10 8v4M10 14.5v.01',
+  barras:     'M4 16V9M10 16V4M16 16v-5',
+  reloj:      'M10 3a7 7 0 100 14 7 7 0 000-14zM10 6v4l3 2',
+  tabla:      'M3 5h14v11H3zM3 9h14M8 9v7',
+  balanza:    'M10 4v13M5 7h10M5 7l-2 5h4zM15 7l-2 5h4z'
 };
-function icono(nombre){
-  return '<svg viewBox="0 0 20 20" width="19" height="19" fill="none" ' +
-    'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
+function icono(nombre, lado){
+  var d = lado || 19;
+  return '<svg viewBox="0 0 20 20" width="' + d + '" height="' + d + '" fill="none" ' +
+    'stroke="currentColor" stroke-width="1.7" stroke-linecap="round" ' +
     'stroke-linejoin="round" aria-hidden="true"><path d="' + ICONOS[nombre] + '"/></svg>';
 }
+// Distintivo circular de la cabecera de una tarjeta.
+function dist(nombre){ return '<span class="dist">' + icono(nombre, 17) + '</span>'; }
 function tile(k, v, s, cls, ico, tono){
   return '<div class="tile' + (tono ? ' ' + tono : '') + '">' +
          '<div class="ico">' + (ico ? icono(ico) : '') + '</div><div class="txt">' +
@@ -754,24 +819,38 @@ function tile(k, v, s, cls, ico, tono){
 function promedio(xs){
   return xs.length ? xs.reduce(function(a, b){ return a + b; }, 0) / xs.length : null;
 }
+// Promedio CON SIGNO del movimiento entre las dos fechas, en puntos basicos.
+// Con signo y no en valor absoluto: tres cajas seguidas se leen de un vistazo y lo
+// que interesa es si el bloque subio o bajo, no solo cuanto se movio.
+//
+// De cada bloque se toma SU propia medida, que no es la misma en los tres:
+//   tasa fija   la tasa de valoracion, que es la unica que tiene
+//   IPC         el margen real
+//   IBR         el margen sobre IBR por el atajo de la bvc
+// Siempre sobre la familia CDT.
+function movimientoCDT(blockId, campo){
+  var xs = nodos(blockId, 'CDT').map(function(r){ return r[campo]; })
+                                .filter(function(v){ return v !== null; });
+  return { pb: promedio(xs), n: xs.length };
+}
+
 function renderResumen(){
-  var movs = nodos('fs', 'CDT').filter(function(r){ return r.dTasa !== null; })
-                               .map(function(r){ return Math.abs(r.dTasa); });
-  var cop = SX.tes(D, rt(), rt1()).filter(function(r){ return r.grupo === 'COP' && r.dTasa !== null; });
-  var medioTes = promedio(cop.map(function(r){ return r.dTasa; }));
   var fallidos = [].concat(rt().checks, rt1().checks).filter(function(c){ return !c.ok; }).length;
   var issues = mezclarIssues();
   var cuenta = function(sev){ return issues.filter(function(i){ return i.sev === sev; }).length; };
   var dias = Math.round((new Date(S.t) - new Date(S.t1)) / 86400000);
+  var caja = function(k, m, sufijo, ico){
+    return tile(k, bps(m.pb), m.n
+                  ? fmt(m.n, 0) + ' nodos con dato · ' + sufijo
+                  : 'sin nodos con dato en las dos fechas',
+                clase(m.pb), ico);
+  };
   $('resumen-tiles').innerHTML =
     tile('Ventana comparada', esc(S.t1) + ' &rarr; ' + esc(S.t), dias + ' días calendario',
          '', 'calendario') +
-    tile('Universo valorado en T', fmt(rt().n_universo, 0),
-         'de ' + fmt(rt().n_registros, 0) + ' registros', '', 'capas') +
-    tile('Movimiento medio CDT tasa fija', fmt(promedio(movs), 1),
-         'pb absolutos entre las dos fechas', '', 'flecha') +
-    tile('Movimiento medio TES COP', bps(medioTes),
-         'pb · ' + fmt(cop.length, 0) + ' referencias', clase(medioTes), 'onda') +
+    caja('CDT tasa fija', movimientoCDT('fs', 'dTasa'), 'pb de tasa', 'flecha') +
+    caja('CDT indexado a IPC', movimientoCDT('ipc', 'dTasa'), 'pb de margen real', 'onda') +
+    caja('CDT indexado a IBR', movimientoCDT('ibr', 'dMargen'), 'pb de margen atajo', 'barras') +
     tile('Integridad', fallidos ? fmt(fallidos, 0) : 'OK',
          fallidos ? 'controles fallidos' : 'los controles del proveedor cuadran',
          '', 'escudo', fallidos ? 'mal' : 'ok') +
@@ -839,8 +918,10 @@ function conmutador(id, hayMargen, motivo, porDefecto, textoTasa){
   return '<span class="toggle" role="group" aria-label="Serie de la gráfica">' +
          boton('tir', textoTasa) + boton('margen', 'Margen') + '</span>';
 }
+// Solo los botones de SERIE. Los de vista (bloque y familia) comparten la clase .tg
+// pero no llevan data-serie, y los cablea cablearVistas.
 function cablearConmutadores(){
-  [].forEach.call(document.querySelectorAll('.tg'), function(b){
+  [].forEach.call(document.querySelectorAll('.tg[data-serie]'), function(b){
     b.onclick = function(){
       serieDe[b.dataset.gr] = b.dataset.serie;
       [].forEach.call(b.parentNode.children, function(o){
@@ -851,37 +932,58 @@ function cablearConmutadores(){
   });
 }
 
+// Los tres bloques por sus tres familias son nueve tarjetas. Apiladas obligan a
+// bajar mucho, asi que se muestra UNA a la vez y se elige con dos segmentados: el
+// bloque y la familia. El estado vive en S.bloque y S.familia.
+function segmentado(grupo, activo, opciones){
+  return '<div class="toggle" role="group">' + opciones.map(function(o){
+    return '<button type="button" class="tg" data-vista="' + grupo + '" data-val="' +
+      esc(o.val) + '" aria-pressed="' + (o.val === activo) + '">' + esc(o.et) + '</button>';
+  }).join('') + '</div>';
+}
+
 function renderBloques(){
-  var html = '';
-  D.bloques.forEach(function(b){
-    var nota = b.nota ? '<p class="lede">' + esc(b.nota) + '</p>' : '';
-    var filtro = 'indicador ' + b.indicador +
-                 (b.periodicidad ? ' · periodicidad ' + b.periodicidad : '') +
-                 (b.moneda ? ' · moneda ' + b.moneda : ' · todas las monedas');
-    var cuerpo = '';
-    b.familias.forEach(function(fam){
-      var filas = nodos(b.id, fam);
-      var conDato = filas.filter(function(r){ return r.nT > 0; }).length;
-      var gid = idChart(b.id, fam);
-      var conmuta = b.margenAtajo || b.indexado;
-      var hayMargen = b.indexado
-        ? filas.some(function(r){ return r.tasaT !== null; })
-        : (b.margenAtajo && filas.some(function(r){ return r.margenT !== null; }));
-      var motivoMargen = 'Sin margen para ' + S.t + ': ' +
-        ((rt().ibr || {}).motivo || 'no hay nodos con margen en esta fecha');
-      cuerpo += '<div class="card"><div class="card-hd"><h3>' + esc(fam) + '</h3>' +
-        '<span class="pill n">' + esc(filtro) + '</span>' +
-        (conmuta ? conmutador(gid, hayMargen, motivoMargen, serieDeBloque(b),
-                              b.indexado ? 'Tasa' : 'TIR') : '') +
-        '<span class="meta">' + conDato + ' nodos con dato</span>' +
-        botonXls(b.label + ' ' + fam) + '</div>' +
-        '<div class="chart" id="' + gid + '"></div>' + leyenda() +
-        tablaBloque(filas, b) + '</div>';
-    });
-    html += '<section id="idx-' + b.id + '"><p class="eyebrow">Curvas por rango de plazo</p>' +
-            '<h2>' + esc(b.label) + '</h2>' + nota + cuerpo + '</section>';
-  });
-  $('bloques').innerHTML = html;
+  var b = D.bloques.filter(function(x){ return x.id === S.bloque; })[0] || D.bloques[0];
+  if(b.familias.indexOf(S.familia) < 0) S.familia = b.familias[0];
+  var fam = S.familia;
+
+  var selBloque = segmentado('bloque', b.id, D.bloques.map(function(x){
+    return { val: x.id, et: x.indicador === 'FS' ? 'Tasa fija' : x.indicador };
+  }));
+  var selFamilia = segmentado('familia', fam, b.familias.map(function(f){
+    return { val: f, et: f };
+  }));
+
+  var filas = nodos(b.id, fam);
+  var conDato = filas.filter(function(r){ return r.nT > 0; }).length;
+  var gid = idChart(b.id, fam);
+  var conmuta = b.margenAtajo || b.indexado;
+  var hayMargen = b.indexado
+    ? filas.some(function(r){ return r.tasaT !== null; })
+    : (b.margenAtajo && filas.some(function(r){ return r.margenT !== null; }));
+  var motivoMargen = 'Sin margen para ' + S.t + ': ' +
+    ((rt().ibr || {}).motivo || 'no hay nodos con margen en esta fecha');
+  var filtro = 'indicador ' + b.indicador +
+               (b.periodicidad ? ' · periodicidad ' + b.periodicidad : '') +
+               (b.moneda ? ' · moneda ' + b.moneda : ' · todas las monedas');
+
+  $('bloques').innerHTML =
+    '<section id="idx-' + b.id + '">' +
+    '<p class="eyebrow">Curvas por rango de plazo</p><h2>' + esc(b.label) + '</h2>' +
+    (b.nota ? '<p class="lede">' + esc(b.nota) + '</p>' : '') +
+    '<div class="card"><div class="card-hd azul">' + dist('balanza') +
+      '<h3>Qué se está viendo</h3>' + selBloque + selFamilia +
+      '<span class="meta">' + esc(filtro) + '</span></div></div>' +
+    '<div class="card"><div class="card-hd">' + dist('barras') +
+      '<h3>' + esc(b.label) + ' · ' + esc(fam) + '</h3>' +
+      (conmuta ? conmutador(gid, hayMargen, motivoMargen, serieDeBloque(b),
+                            b.indexado ? 'Tasa' : 'TIR') : '') +
+      '<span class="meta">' + conDato + ' nodos con dato</span>' +
+      botonXls(b.label + ' ' + fam) + '</div>' +
+      '<div class="chart" id="' + gid + '"></div>' + leyenda() +
+      tablaBloque(filas, b) + '</div>' +
+    '</section>';
+  cablearVistas();
   cablearConmutadores();
 }
 
@@ -933,15 +1035,15 @@ function tablaBloque(filas, bloque){
       '<td class="sep">' + fmt(r.cuponT, 3) + ' %</td>' +
       (indexado
         ? '<td class="sep">' + pct(r.brutaT1) + '</td><td>' + pct(r.brutaT) + '</td>' +
-          '<td class="' + clase(r.dBruta) + '">' + bps(r.dBruta) + '</td>'
+          '<td class="' + clase(r.dBruta) + '">' + bpsUd(r.dBruta) + '</td>'
         : '') +
       '<td class="sep">' + pct(r.tasaT1) + '</td><td>' + pct(r.tasaT) + '</td>' +
-      '<td class="' + clase(r.dTasa) + '">' + bps(r.dTasa) + '</td>';
+      '<td class="' + clase(r.dTasa) + '">' + bpsUd(r.dTasa) + '</td>';
     if(conMargen){
       fila += celdaMargen(r.margenT1, 't1', true, r.nT1 > 0) +
         celdaMargen(r.margenT, 't', false, r.nT > 0) +
         (r.dMargen === null ? '<td class="neutro">' + SX.VACIO + '</td>'
-                            : '<td class="' + clase(r.dMargen) + '">' + bps(r.dMargen) + '</td>');
+                            : '<td class="' + clase(r.dMargen) + '">' + bpsUd(r.dMargen) + '</td>');
     }
     return fila + '<td class="sep neutro">' + fmt(r.nT1, 0) + '</td>' +
       '<td class="neutro">' + fmt(r.nT, 0) + '</td></tr>';
@@ -1065,7 +1167,7 @@ function renderTes(){
       '<td>' + fmt(r.durT1, 3) + '</td><td>' + fmt(r.durT, 3) + '</td>' +
       '<td class="sep">' + fmt(r.precioT1, 3) + '</td><td>' + fmt(r.precioT, 3) + '</td>' +
       '<td class="sep">' + pct(r.tasaT1) + '</td><td>' + pct(r.tasaT) + '</td>' +
-      '<td class="' + clase(r.dTasa) + '">' + bps(r.dTasa) + '</td>' +
+      '<td class="' + clase(r.dTasa) + '">' + bpsUd(r.dTasa) + '</td>' +
       '<td class="sep">' + fmt(r.dv01, 0) + '</td></tr>';
   }).join('');
   var series = [
@@ -1075,7 +1177,7 @@ function renderTes(){
     { name: 'UVR T',   color: COLORES.uvrT,  points: puntosTes(filas, 'UVR', 'anios', 'tasaT') }
   ];
   $('tes-card').innerHTML =
-    '<div class="card-hd"><h3>Valoración observada por plazo</h3>' +
+    '<div class="card-hd">' + dist('onda') + '<h3>Valoración observada por plazo</h3>' +
     '<span class="meta">' + fmt(filas.length, 0) + ' referencias en las dos fechas</span>' +
     botonXls('TES por plazo') + '</div>' +
     '<div class="chart" id="ch-tes"></div>' +
@@ -1211,21 +1313,39 @@ function dibujar(host, spec){
     }
     var px = barras.map(function(b){ return sx(b[0]); });
     var cero = sd(0);
+    // 2 px de aire entre barras y esquinas redondeadas: separa las columnas sin
+    // ponerles borde, que a este grosor solo ensucia.
+    var HUECO = 2, extremos = {};
+    if(barras.length){
+      var vals = barras.map(function(b){ return b[1]; });
+      extremos[vals.indexOf(Math.max.apply(null, vals))] = true;
+      extremos[vals.indexOf(Math.min.apply(null, vals))] = true;
+    }
     barras.forEach(function(b, i){
       var izq = i > 0 ? (px[i - 1] + px[i]) / 2
                       : px[i] - (px.length > 1 ? (px[1] - px[0]) / 2 : 6);
       var der = i < px.length - 1 ? (px[i] + px[i + 1]) / 2
                                   : px[i] + (px.length > 1 ? (px[i] - px[i - 1]) / 2 : 6);
-      var y = sd(b[1]);
-      svg.appendChild(svgEl('rect', { x: izq.toFixed(1),
-        width: Math.max(der - izq, 0.6).toFixed(1),
+      var y = sd(b[1]), ancho = Math.max(der - izq - HUECO, 0.6);
+      svg.appendChild(svgEl('rect', { x: (izq + HUECO / 2).toFixed(1),
+        width: ancho.toFixed(1),
         y: Math.min(y, cero).toFixed(1),
         height: Math.max(Math.abs(y - cero), 0.6).toFixed(1),
+        rx: Math.min(3, ancho / 2).toFixed(1),
         fill: COLORES.barra, opacity: COLORES.barraOpacidad }));
+      // Etiqueta directa solo en el maximo y el minimo: con 36 nodos, un numero por
+      // barra es ruido, y son los dos extremos lo que se busca en esta serie.
+      if(extremos[i]){
+        var et = svgEl('text', { 'class': 'dir', x: ((izq + der) / 2).toFixed(1),
+          y: (b[1] >= 0 ? y - 4 : y + 10).toFixed(1), 'text-anchor': 'middle' });
+        et.textContent = bps(b[1]); svg.appendChild(et);
+      }
       delta[b[0]] = b[1];
     });
+    // La linea del cero va punteada: es referencia, no dato.
     svg.appendChild(svgEl('line', { x1: M.l, x2: W - M.r, y1: cero, y2: cero,
-                                    stroke: COLORES.barra, 'stroke-width': 1.2 }));
+                                    stroke: COLORES.deltaEje, 'stroke-width': 1,
+                                    'stroke-dasharray': '3 3' }));
     var dl = svgEl('text', { 'class': 'lbl', x: W - M.r + 8, y: 12, 'text-anchor': 'start' });
     dl.textContent = 'Δ pb'; svg.appendChild(dl);
   }
@@ -1309,9 +1429,24 @@ function dibujarUnBloque(gid){
   });
 }
 
+// Solo se dibuja la tarjeta visible. Al imprimir salen las tres pestanias a la vez,
+// pero de la primera sigue saliendo la vista elegida: es lo que esta en pantalla.
 function dibujarBloques(){
-  D.bloques.forEach(function(b){
-    b.familias.forEach(function(fam){ dibujarUnBloque(idChart(b.id, fam)); });
+  var b = D.bloques.filter(function(x){ return x.id === S.bloque; })[0] || D.bloques[0];
+  var fam = b.familias.indexOf(S.familia) >= 0 ? S.familia : b.familias[0];
+  dibujarUnBloque(idChart(b.id, fam));
+}
+
+// Los segmentados de bloque y familia. Al cambiar de bloque la familia elegida puede
+// no existir en el nuevo; renderBloques la recorta al primero.
+function cablearVistas(){
+  [].forEach.call(document.querySelectorAll('.tg[data-vista]'), function(b){
+    b.onclick = function(){
+      if(b.dataset.vista === 'bloque') S.bloque = b.dataset.val;
+      else S.familia = b.dataset.val;
+      renderBloques();
+      dibujarBloques();
+    };
   });
 }
 
@@ -1424,7 +1559,8 @@ function tablaHpr(datos, indice, titulo, subtitulo){
       '<td>' + (HPR.tipo === 'fs' ? SX.VACIO : pct(d.margen)) + '</td>' +
       celda + '</tr>';
   }).join('');
-  return '<div class="card"><div class="card-hd"><h3>' + esc(titulo) + '</h3>' +
+  return '<div class="card"><div class="card-hd">' + dist('reloj') +
+    '<h3>' + esc(titulo) + '</h3>' +
     '<span class="pill n">' + esc(subtitulo) + '</span>' +
     '<span class="meta">' + datos.filas.length + ' rangos</span>' +
     // el nombre de una hoja de Excel no pasa de 31 caracteres, asi que «Horizonte 90
@@ -1473,9 +1609,61 @@ function renderTablasHpr(){
             : HPR.escenario + (HPR.delta ? ' · Δ ' + bps(HPR.delta, 0) + ' pb' : '');
   if(HPR.tipo === 'fs' && HPR.delta) sub += ' · Δ ' + bps(HPR.delta, 0) + ' pb';
   $('hpr-tablas').innerHTML =
+    tablaResumenHpr(datos) +
     tablaHpr(datos, 0, 'Horizonte 90 días', sub) +
     tablaHpr(datos, 1, 'Horizonte 180 días', sub) +
     tablaHpr(datos, 2, 'Al vencimiento', sub);
+}
+
+// Los cinco nodos del resumen, por su posicion en la rejilla mensual. El nodo `i`
+// vence al final de su ventana, asi que el de indice 2 es el que vence a ~3 meses.
+// Se nombran por el plazo redondo y no por el numero de nodo, que es lo que se lee.
+var RESUMEN_NODOS = [
+  { i: 2,  et: '90 días' },  { i: 5,  et: '180 días' }, { i: 11, et: '12 meses' },
+  { i: 17, et: '18 meses' }, { i: 23, et: '24 meses' }
+];
+
+// Tabla de resumen: los indicadores en las filas y cinco vencimientos en las
+// columnas. Es la vista de un vistazo; el detalle de los 36 rangos va debajo.
+function tablaResumenHpr(datos){
+  var porIndice = {};
+  datos.filas.forEach(function(d){ porIndice[d.fila.i] = d; });
+  var cols = RESUMEN_NODOS.filter(function(c){ return porIndice[c.i]; });
+  if(!cols.length) return '';
+
+  var celda = function(d, f){ return '<td>' + (d ? f(d) : SX.VACIO) + '</td>'; };
+  var hpr = function(k){
+    return function(d){
+      var r = d.res[k];
+      if(r.hpr === null || !isFinite(r.hpr)) return SX.VACIO;
+      return pct(r.hpr) + (r.alVencimiento ? '<small>(al venc.)</small>' : '');
+    };
+  };
+  var filas = [
+    ['Vencimiento',            function(d){ return esc(d.venc); }],
+    ['Días al vencimiento',    function(d){ return fmt(SX.diasEntre(S.t, d.venc), 0); }],
+    ['Cupón facial',           function(d){ return fmt(d.fila.cuponT, 3) + ' %'; }],
+    ['Tasa (T)',               function(d){ return pct(d.fila.brutaT); }],
+    ['Margen',                 function(d){ return HPR.tipo === 'fs' ? SX.VACIO
+                                                                     : pct(d.margen); }],
+    ['Rentabilidad 90 días',   hpr(0)],
+    ['Rentabilidad 180 días',  hpr(1)],
+    ['Al vencimiento',         hpr(2)]
+  ];
+
+  var cab = '<tr><th>Indicador</th>' + cols.map(function(c){
+      return '<th>' + esc(c.et) + '</th>'; }).join('') + '</tr>';
+  var cuerpo = filas.map(function(f){
+    return '<tr><td class="key">' + esc(f[0]) + '</td>' +
+      cols.map(function(c){ return celda(porIndice[c.i], f[1]); }).join('') + '</tr>';
+  }).join('');
+
+  return '<div class="card"><div class="card-hd">' + dist('tabla') +
+    '<h3>Resumen</h3>' +
+    '<span class="meta">' + cols.length + ' de ' + RESUMEN_NODOS.length + ' plazos con dato</span>' +
+    botonXls('HPR ' + HPR.tipo.toUpperCase() + ' resumen ' + HPR.escenario) + '</div>' +
+    '<div class="tw"><table><thead>' + cab + '</thead><tbody>' + cuerpo +
+    '</tbody></table></div></div>';
 }
 
 function renderHpr(){
@@ -1796,6 +1984,7 @@ function sincronizar(){
   }
   $('aviso-orden').textContent = '';
   ultimoValido = { t: S.t, t1: S.t1 };
+  $('corte').textContent = 'Corte ' + SX.dia(S.t) + '/' + S.t.slice(0, 4);
   $('ipc-t').value = (S.ipcT * 100).toFixed(2);
   $('ipc-t1').value = (S.ipcT1 * 100).toFixed(2);
   $('br').value = (S.br * 100).toFixed(2);
@@ -1898,16 +2087,26 @@ def render(*, serie, seleccion: tuple[str, str], params: MarketParams,
 <style>{CSS}</style></head><body>
 <header class="top">
   <div class="top-in">
-    <h1>Renta fija local</h1>
-    <div class="tabs" role="tablist" aria-label="Secciones del reporte">
-      <button type="button" class="tab" id="tab-curvas" role="tab"
-        aria-controls="panel-curvas" aria-selected="true">Curvas por rango de plazo</button>
-      <button type="button" class="tab" id="tab-hpr" role="tab"
-        aria-controls="panel-hpr" aria-selected="false" tabindex="-1">Rentabilidades esperadas</button>
-      <button type="button" class="tab" id="tab-datos" role="tab"
-        aria-controls="panel-datos" aria-selected="false" tabindex="-1">Comparación y control</button>
+    <div class="hero">
+      <div class="hero-in">
+        <div>
+          <h1>Renta fija local</h1>
+          <p class="sub">Tomado de precia Sx</p>
+        </div>
+        <span class="corte" id="corte"></span>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Secciones del reporte">
+        <button type="button" class="tab" id="tab-curvas" role="tab"
+          aria-controls="panel-curvas" aria-selected="true"><b>Curvas por rango de
+          plazo</b><small>Tasa fija · IPC · IBR</small></button>
+        <button type="button" class="tab" id="tab-hpr" role="tab"
+          aria-controls="panel-hpr" aria-selected="false" tabindex="-1"><b>Rentabilidades
+          esperadas</b><small>90 y 180 días · al vencimiento</small></button>
+        <button type="button" class="tab" id="tab-datos" role="tab"
+          aria-controls="panel-datos" aria-selected="false" tabindex="-1"><b>Comparación y
+          control</b><small>Integridad y calidad de datos</small></button>
+      </div>
     </div>
-  </div>
   <div class="barra"><div class="barra-in">
     <label for="sel-t1">T-1 <select id="sel-t1" aria-label="Fecha de comparación"></select></label>
     <label for="sel-t">T <select id="sel-t" aria-label="Fecha de valoración"></select></label>
@@ -1919,6 +2118,7 @@ def render(*, serie, seleccion: tuple[str, str], params: MarketParams,
       aria-label="Tasa del Banco de la República, en porcentaje"><span class="u">%</span></label>
     <span class="aviso" id="aviso-orden"></span>
   </div></div>
+  </div>
 </header>
 
 <div class="wrap">
