@@ -388,14 +388,52 @@ dentro del primer año, y la de largo plazo (`AAA`) desde ahí.
 
 ## Rentabilidades esperadas
 
-Tercera pestaña. Cada ventana de la rejilla se trata como un **CDT sintético
+Segunda pestaña. Cada ventana de la rejilla se trata como un **CDT sintético
 independiente** que vence al final de su ventana, con el cupón y la tasa que esa
 ventana muestra en T. No se promedia ni se interpola entre rangos, y no entra ninguna
 fuente distinta de las que ya usa el reporte más las sendas de proyección.
 
-Controles: tipo (tasa fija / IPC / IBR), escenario (Alcista · Base · Bajista) y un campo
-libre de delta en puntos básicos. Tres tablas por tipo: **90 días, 180 días y al
-vencimiento**.
+**Controles**, en su propia tarjeta arriba: tipo (tasa fija / IPC / IBR), escenario
+(Alcista · Base · Bajista) y un campo libre de delta en puntos básicos. Los tres mueven
+todo lo que hay debajo.
+
+### Dos tablas: el resumen y el detalle
+
+**Resumen.** Los indicadores en las filas y **cinco vencimientos** en las columnas — 90
+días, 180 días, 12 meses, 18 meses y 24 meses—. Es la vista de un vistazo:
+
+```
+  Indicador                90 días   180 días   12 meses   18 meses   24 meses
+  ─────────────────────────────────────────────────────────────────────────────
+  Vencimiento            2026-12-08  2027-03-08 2027-09-08 2028-03-08 2028-09-08
+  Días al vencimiento            90        180        365        548        730
+  Cupón facial              4,797 %    5,037 %    5,126 %    5,021 %    4,833 %
+  Tasa (T)                 11,510 %   12,235 %   12,159 %   12,160 %   12,125 %
+  Margen                    4,961 %    5,643 %    5,571 %    5,572 %    5,539 %
+  Rentabilidad 90 días     11,505 %   12,242 %   12,153 %   12,128 %   12,085 %
+  Rentabilidad 180 días           ·   12,247 %   12,337 %   12,301 %   12,266 %
+  Al vencimiento           11,505 %   12,240 %   12,301 %   12,288 %   12,254 %
+```
+
+Los cinco plazos son **posiciones fijas de la rejilla mensual** —los nodos 3, 6, 12, 18 y
+24—, no una búsqueda por fecha: el nodo vence al final de su ventana, así que el de índice
+3 es el que vence a unos 90 días. Están en `RESUMEN_NODOS`, y se nombran por el plazo
+redondo porque es lo que se lee. Un plazo que no tenga nodo con dato simplemente no sale,
+y la cabecera dice cuántos de los cinco se pudieron armar.
+
+**Detalle de rentabilidades.** Debajo, la tabla larga: una fila por rango, con fechas,
+vencimiento, días, cupón, tasa, margen y HPR. Muestra **un horizonte a la vez**, y sus
+propios botones lo eligen:
+
+```
+  Detalle de rentabilidades   [ 90 días | 180 días | Vencimiento ]   BASE   31 rangos
+```
+
+Antes salían las tres apiladas, que son más de cien filas para llegar a la última. El
+título es fijo: cuál de los tres se está viendo ya lo dicen los botones. El nombre del
+archivo de Excel **sí** lleva el horizonte, para que tres descargas seguidas no se pisen.
+
+El **resumen no tiene esos botones**: trae los tres horizontes en sus propias filas.
 
 ### El bloque de IPC, de principio a fin
 
@@ -1275,22 +1313,83 @@ Comprobación del método, verificada contigo contra la Calculadora IBR: valorac
 mensuales, IBR previo 11,526 % → **margen 1,15 %**. Está fijada en las pruebas junto con
 otros ocho plazos.
 
-### Dos pestañas
+### La cabecera
 
-El título va centrado y las dos pestañas debajo. Las fechas comparadas no se repiten
-en la cabecera: están en las listas de la barra de parámetros.
+Una tarjeta redondeada que **flota** sobre el fondo, no una franja a sangre. Dentro van
+dos piezas pegadas: la azul con la identidad y las pestañas, y la blanca con los
+controles. Las dos se quedan **fijas al bajar**, porque hay tablas de 84 filas y perder
+las pestañas o el selector de fechas a mitad de scroll es peor que el espacio que ocupan.
 
-| Pestaña | Contenido |
+| | |
 |---|---|
-| **Curvas por rango de plazo** | los bloques de tasa fija, IPC e IBR (los dos indexados con su margen en columnas aparte y conmutador de serie en la gráfica), cada uno con CDT, CDT HY y BONO |
-| **Rentabilidades esperadas** | HPR del CDT sintético de cada rango a 90 días, 180 días y al vencimiento, por escenario y con delta |
-| **Comparación y control** | el resumen del par, la cinta del archivo, el embudo de exclusiones, la tabla de TES y la calidad de datos |
+| Título | **Renta fija local** |
+| Subtítulo | **Tomado de precia Sx**, en verde vivo |
+| Píldora, a la derecha | `Corte 28/07/2026` — la fecha T, que antes solo estaba dentro de un desplegable |
+
+### Tres pestañas, en fichas
+
+Cada pestaña es una **ficha con su descriptor debajo**: la activa en blanco, las otras
+en azul translúcido.
+
+| Pestaña | Descriptor | Contenido |
+|---|---|---|
+| **Curvas por rango de plazo** | Tasa fija · IPC · IBR | un bloque y una familia a la vez, con su gráfica y su tabla |
+| **Rentabilidades esperadas** | 90 y 180 días · al vencimiento | el resumen de cinco plazos y la tabla de detalle del horizonte elegido |
+| **Comparación y control** | Integridad y calidad de datos | las seis fichas del par, la cinta del archivo, el embudo de exclusiones, la tabla de TES y la calidad de datos |
 
 La pestaña activa queda en el ancla de la dirección (`#curvas` o `#datos`), así que el
-reporte se puede compartir abierto en una de las dos y el botón de atrás del navegador
+reporte se puede compartir abierto en una de las tres y el botón de atrás del navegador
 funciona. Se cambia con el ratón o con las flechas del teclado.
 
-Al **imprimir** salen las dos pestañas, no solo la visible.
+Al **imprimir** salen las tres pestañas, no solo la visible, y sin fichas ni botones.
+
+### Una tarjeta a la vez, no nueve apiladas
+
+Tres bloques por tres familias son **nueve tarjetas**, cada una con su gráfica y su tabla.
+Apiladas obligaban a bajar muchísimo para llegar a la última.
+
+Ahora hay **dos segmentados** en una tarjeta azul de control, arriba del todo:
+
+```
+  Qué se está viendo    [ Tasa fija | IPC | IBR ]   [ CDT | CDT HY | BONO ]
+```
+
+y debajo **una sola tarjeta**, la del par elegido. La gráfica y la tabla se rehacen al
+pulsar. Al cambiar de bloque, si la familia elegida no existe en el nuevo se recorta a la
+primera; hoy los tres tienen las mismas tres, pero la regla está escrita para cuando no
+sea así.
+
+El estado vive en `S.bloque` y `S.familia`, y `dibujarBloques()` traza **solo** la
+gráfica visible en vez de las nueve.
+
+### Las seis fichas del resumen
+
+En la tercera pestaña. La primera y las dos últimas describen la corrida; **las tres del
+medio son el movimiento del mercado**, una por bloque, siempre sobre la familia CDT:
+
+| Ficha | Qué mide |
+|---|---|
+| Ventana comparada | el par de fechas y los días de calendario entre ellas |
+| **CDT tasa fija** | el movimiento medio de su **tasa** de valoración, en pb |
+| **CDT indexado a IPC** | el movimiento medio de su **margen real**, en pb |
+| **CDT indexado a IBR** | el movimiento medio de su **margen por el atajo de la bvc**, en pb |
+| Integridad | cuántos controles del proveedor fallaron, o `OK` |
+| Calidad de datos | errores / avisos |
+
+Dos decisiones que conviene entender:
+
+**Cada bloque va con su propia medida.** La tasa fija no tiene margen, así que se mide por
+su tasa; los dos indexados sí lo tienen, y el margen es lo que de verdad les es propio —la
+tasa de un indexado arrastra además el movimiento del índice—.
+
+**El promedio lleva signo**, no es el valor absoluto que había antes. Con tres fichas
+seguidas lo que se busca es leer de un vistazo que IPC bajó y que IBR subió; el color
+—rojo si sube, verde si baja— lo remata. Cada ficha dice además sobre cuántos nodos
+promedió, porque un promedio sobre tres nodos no es lo mismo que sobre treinta.
+
+Antes había aquí dos fichas que ya no están: el **universo valorado en T** y el
+**movimiento medio de los TES COP**. El conteo del universo sigue en el pie del reporte y
+el movimiento de los TES, en la tabla de TES de esa misma pestaña.
 
 ### Descargar una tabla a Excel
 
@@ -1303,6 +1402,7 @@ El archivo se llama como la tabla, más la fecha T:
 ```
 Tasa fija CDT 2026-07-28.xlsx
 Indexado a IBR (IB1) CDT HY 2026-07-28.xlsx
+HPR IPC resumen Base 2026-07-28.xlsx
 HPR IBR 90 días Alcista 2026-07-28.xlsx
 HPR IPC Al vencimiento Base 2026-07-28.xlsx
 TES por plazo 2026-07-28.xlsx
@@ -1347,14 +1447,22 @@ Al imprimir, los botones no salen.
 
 **Azul corporativo y verde sobre gris muy claro.**
 
-| Dónde | Color |
-|---|---|
-| Cabecera y encabezados de tabla | `#0B2E4F` — azul profundo, texto en blanco |
-| Fila de agrupación de las tablas | `#16456E`, un tono más claro, para que se lea como el nivel de arriba |
-| Fondo de página | `#F2F5F8` |
-| Tarjetas y barra de parámetros | blanco, con `#D7DFE7` de regla |
-| Destacados, filete de la cabecera, punto de cada tarjeta | `#0E8A4A` — el verde |
-| Serie de las gráficas | `#1A5FA8` azul y `#0E8A4A` verde |
+| Dónde | Color | Medido |
+|---|---|---|
+| Cabecera y encabezados de tabla | `#0D2B45`, con degradado a `#1B4A6B` | texto blanco |
+| Subtítulo de la cabecera | `#2ECC71`, verde vivo | **6,90:1** sobre el azul |
+| Destacados y texto en verde sobre blanco | `#0B7A40` | **5,42:1**, cumple AA |
+| Serie verde de las gráficas | `#0E8A4A` | 4,42:1 — basta, un trazo pide 3:1 |
+| Serie azul de las gráficas | `#1A5FA8` | 6,47:1 |
+| Fila de agrupación de las tablas | `#EDF1F6` con texto gris | pesa menos que el azul |
+| Fondo de página | `#F1F4F8` | |
+| Tarjetas y barra de parámetros | blanco, con `#DCE3EB` de regla | |
+
+**El verde tiene dos tonos y no es capricho.** El `#0E8A4A` que se usaba para todo daba
+**4,42:1** sobre blanco, justo por debajo del mínimo AA de 4,5. Se separó: el texto pasa a
+`#0B7A40` (5,42:1) y la línea de la gráfica se queda en el original, que solo necesita 3:1
+por no ser texto. Y el verde vivo `#2ECC71` vive **únicamente sobre el azul** de la
+cabecera, donde da 6,90:1; sobre blanco no llegaría.
 
 Las superficies llevan el color y los datos la tinta oscura. Es la jerarquía que hace
 legible una tabla densa: el color identifica la interfaz y el contraste identifica las
@@ -1377,7 +1485,61 @@ Los números de su eje van en un gris más oscuro, porque el de las barras no al
 **Al imprimir, la cabecera y los encabezados de tabla se invierten** a tinta sobre papel.
 En pantalla son planchas de azul oscuro; en papel, muchas impresoras de oficina descartan
 los fondos y el texto blanco saldría sobre blanco. Se conserva la regla que marca la
-división, y los distintivos de las fichas no se imprimen.
+división. Tampoco se imprimen las fichas, los segmentados, los botones de Excel ni los
+distintivos, y **la primera columna deja de estar congelada**: con `position:sticky` se
+redibujaría en cada página.
+
+### Las piezas de la interfaz
+
+Cuatro formas que se repiten en todo el reporte. Conviene reconocerlas:
+
+**Tarjeta.** Esquina redondeada de 14 px, sombra suave que crece al pasar por encima, y
+una cabecera con **franja tintada y distintivo circular**: verde en las tarjetas de datos
+y azul en las de control. Es lo que separa de un vistazo «esto son cifras» de «esto
+cambia lo que veo».
+
+**Segmentado.** El control de elegir uno entre varios: un carril tenue con el activo en
+pastilla azul. Se usa para el bloque, la familia, la serie de la gráfica (Tasa / Margen),
+el tipo, el escenario y el horizonte. Todos son el mismo componente (`.toggle` y `.tg`),
+así que se aprenden una vez.
+
+**Ficha de resumen.** Distintivo cuadrado con icono a la izquierda, rótulo pequeño en
+versalitas, cifra grande y subtítulo. El distintivo toma el tono del estado —verde, rojo
+o ámbar— pero el color nunca es lo único que lo dice: la cifra y su subtítulo ya lo
+cuentan.
+
+**Recuadro de aviso.** Las notas al pie de tabla —muestra corta, extrapolación, rangos que
+vencen antes del horizonte— van en un recuadro tintado con borde de color a la izquierda y
+la primera frase en negrita como titular, en vez de una franja de texto corrido.
+
+Los **iconos son SVG dibujados a mano**, nueve trazos sueltos en una constante del propio
+reporte. No hay tipografía de iconos ni nada que cargar: el archivo tiene que seguir
+abriendo desde el disco y sin red.
+
+### Detalles de las tablas
+
+**La primera columna va congelada a la izquierda.** La tabla de IBR tiene **19 columnas** y
+se desplaza en horizontal; sin esto, la ventana de vencimientos se sale de vista y deja de
+saberse de qué rango es cada fila. Su fondo tiene que ser opaco —filas pares y hover
+incluidos— porque las demás celdas pasan por debajo. La segunda columna acompaña en tono
+pero **no** se congela: con 19 columnas, dos fijas se comen media pantalla.
+
+**Dos niveles de encabezado, con pesos distintos.** La fila de agrupación va en gris claro
+con texto gris y la de columnas en azul oscuro con texto blanco. Antes las dos eran
+azules y la de arriba se leía como otra fila de columnas.
+
+**Los Δ pb llevan la unidad pegada**, más pequeña y sin peso: `+16,5 pb`. Es un sufijo, no
+un dato más.
+
+### Detalles de las gráficas
+
+Las barras de Δ pb tienen **esquinas redondeadas y 2 px de aire** entre ellas: separa las
+columnas sin ponerles borde, que a ese grosor solo ensucia.
+
+Llevan **etiqueta directa solo en el máximo y el mínimo**. Con 36 nodos, un número por
+barra es ruido, y los dos extremos son lo que se busca en esa serie.
+
+La línea del cero va **punteada**, porque es referencia y no dato.
 
 El reporte tiene **un solo tema, claro**. No hay modo oscuro: es una herramienta de
 escritorio que además se imprime, y un segundo tema sería otro juego de contrastes que
@@ -1389,7 +1551,7 @@ necesidad de una fuente monoespaciada. La única excepción es el registro crudo
 cinta», que sigue en monoespaciada porque ahí el ancho fijo no es estética: es lo que
 hace que los cortes de campo sean ciertos.
 
-El eje X de todas las gráficas —las nueve de bloque y la de TES— es el **plazo, en
+El eje X de todas las gráficas —la del bloque visible y la de TES— es el **plazo, en
 años**. En TES es el plazo del propio título. En los bloques el nodo no es un título
 sino una ventana mensual de vencimientos, así que su plazo es el **final de la
 ventana**: la misma convención con la que ya se le calcula el margen sobre IBR y su
@@ -1533,7 +1695,9 @@ donde el corte no cambió.
 | Curva TES | descriptiva: condiciones faciales, plazo, duración, precio, valoración y su diferencia. Única medida derivada: DV01. Sin ajuste logarítmico, sin spreads, sin implícita, sin carry, sin extrapolación |
 | Nemotécnicos CINAS y TDS | fuera de la tabla de TES (llegan con tasa y duración en cero) |
 | Corte de los bloques | ventanas mensuales de vencimiento, con la ventana de fechas en la primera columna |
-| Rentabilidades esperadas | solo CDT; tres tipos, tres escenarios, delta libre en pb |
+| Rentabilidades esperadas | solo CDT; tres tipos, tres escenarios, delta libre en pb; un resumen de cinco plazos fijos (90 d, 180 d, 12, 18 y 24 meses) y una tabla de detalle por horizonte |
+| Fichas del resumen | seis: la ventana comparada, el movimiento medio **con signo** de los CDT en cada bloque —tasa fija por su tasa, IPC e IBR por su margen—, integridad y calidad de datos |
+| Navegación de la pestaña de curvas | una tarjeta a la vez; el bloque y la familia se eligen con segmentados y la gráfica y la tabla se rehacen |
 | Valoración del CDT sintético de IPC | vence en el borde de su ventana; cupón trimestral `[(1+cupón T)(1+IPC)]^(1/4)−1` con el IPC de tres meses antes de cada pago; **V₀ con la convención del proveedor** —solo el primer cupón usa el índice que se le fijó, los demás el IPC de la barra— descontado a la TIR del nodo; cupones cobrados y V₁ proyectados con la senda del escenario; venta a `(1+margen real+δ)(1+IPC esperado en la fecha de salida)−1` |
 | Valoración del CDT sintético de IBR | vence el último día de su ventana; cupón mensual `(IBR + cupón T)/12` con el IBR de un mes antes de cada pago; **V₀ con la convención del proveedor** —el primer cupón de `IB1.xlsx`, los demás de la curva forward `IND_IBR` del día hábil anterior— descontado a la «Tasa (T)» del rango tal cual; cupones cobrados y V₁ proyectados con la senda del escenario; **V₁ por el método de la Calculadora IBR de la bvc**: una tasa por período, `(IBR que fijó ese cupón + margen del atajo + δ)/12`, base 30/360, con el exponente `L/K` solo en el primer período |
 | Horizonte | 7 años en tasa fija, 3 en IPC y en IBR |
