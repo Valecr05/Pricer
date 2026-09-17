@@ -464,9 +464,8 @@ Puesto en una línea de tiempo, con salida a 180 días:
   ┌ Cupón cobrado y V₁ · lo que de verdad ocurre ────────────────────────────────────┐
   │  cupón 0 → su IPC ya se fijó: igual en los tres escenarios                       │
   │  cupones 1, 2 y 3 → IPC de tres meses antes de su pago, según la SENDA           │
-  │  descuento de V₁: NO una tasa, sino una por tramo, desde el día 180              │
-  │      tasa_i = (1 + margen real de T + δ) × (1 + IPC que armó el cupón i) − 1     │
-  │      el mismo IPC del cupón, no el de un único punto de la senda                 │
+  │  descuento: una sola tasa, desde el día 180                                      │
+  │             (1 + margen real de T + δ) × (1 + IPC esperado el 24-ene-27) − 1     │
   └──────────────────────────────────────────────────────────────────────────────────┘
 
   HPR = XIRR sobre:   −V₀ (día 0)  ·  +cupón 0 (día 91)  ·  +V₁ (día 180)
@@ -497,12 +496,9 @@ Dos consecuencias de esa convención:
 - Los flujos **anteriores** a la fecha de salida son V₀ hoy y cada cupón cobrado en la
   fecha en que se paga.
 - Los flujos **posteriores** se traen a la fecha de salida —proyectados con la senda del
-  escenario— **tramo a tramo**: cada uno a `(1 + margen real + δ) × (1 + IPC que armó ese
-  cupón) − 1`, en base ACT/365. No hay una sola tasa de salida, y por eso `tasa_salida`
-  viene `None` en IPC, igual que en IBR.
-- Ese IPC es el de **tres meses antes de cada pago**, el mismo que arma el cupón. Leer un
-  único punto de la senda —el del día de la venta— era lo que hundía los nodos largos: ver
-  «Por qué V₁ lee la senda entera y no un solo punto».
+  escenario— a la tasa `(1 + margen real + δ) × (1 + IPC esperado en la fecha de salida) − 1`.
+- Ese IPC esperado se lee **en la propia fecha de salida**, no tres meses antes: la regla
+  de «tres meses antes» rige la tasa cupón, no la de descuento.
 - El **margen no se recalcula**: es el de T y solo lo mueve el delta.
 
 **El HPR** es el XIRR de `−V₀` hoy, los cupones cobrados en sus días y `+V₁` en el día h,
@@ -532,13 +528,13 @@ El delta, siempre sobre la tasa de venta:
 Como el delta mueve el **margen** y este va dentro del producto, 100 pb de delta se
 traducen en unos 106 pb sobre la tasa de venta. Es deliberado.
 
-#### Por qué V₁ lee la senda entera y no un solo punto
+#### Pendiente: la tasa de salida lee un solo punto de la senda
 
-Esto **estuvo mal y se corrigió**. Vale la pena dejar escrito el síntoma, porque es
-llamativo: *los nodos largos rendían cada vez menos a 90 y 180 días, hasta llegar a
-negativo.*
+**Los nodos largos rinden cada vez menos a 90 y 180 días, hasta llegar a negativo.** Está
+localizado, medido y **sin corregir**: es una convención de negocio y se cambia cuando se
+confirme.
 
-La tasa de salida era `(1 + margen real + δ) × (1 + IPC esperado en T+h) − 1`. Ese
+La tasa de salida es `(1 + margen real + δ) × (1 + IPC esperado en T+h) − 1`. Ese
 `IPC en T+h` es **un solo punto** de la senda —el del día de la venta— y es **el mismo
 para todos los plazos**:
 
@@ -549,11 +545,11 @@ para todos los plazos**:
 | 24 meses | 7,333 % | 5,730 % |
 | 36 meses | 7,333 % | 5,153 % |
 
-Con una senda **plana** daba igual: las dos columnas coinciden. Pero las sendas reales de
-IPC **convergen** —arrancan altas y bajan—, y ahí el nodo de 36 meses se descontaba al
-7,3 % cuando el propio escenario decía que iba a vivir una inflación media del 5,2 %. La
-tasa de salida quedaba muy por encima de la de entrada y el castigo se multiplicaba por la
-duración. Encima los cupones de V₁ **sí** leen la senda entera, así que bajaban: descuento
+Con una senda **plana** da igual: las dos columnas coinciden. Pero las sendas reales de
+IPC **convergen** —arrancan altas y bajan—, y ahí el nodo de 36 meses se descuenta al
+7,3 % cuando el propio escenario dice que va a vivir una inflación media del 5,2 %. La
+tasa de salida queda muy por encima de la de entrada y el castigo se multiplica por la
+duración. Encima los cupones de V₁ **sí** leen la senda entera, así que bajan: descuento
 alto con cupones bajos.
 
 Medido con la senda de arriba (8,0 % → 4,0 % en 18 meses), barra 6,14 %, Tasa (T) 11,07 %
@@ -568,25 +564,15 @@ y cupón 3 %, cambiando **solo** cómo se arma esa tasa:
 | 30 m | **−6,09 %** | 9,05 % | 11,02 % |
 | 36 m | **−10,79 %** | 8,97 % | **10,92 %** |
 
-La columna de la derecha es la que corre hoy. La del medio —el IPC medio de la vida que
-le queda— se probó y se descartó: mejora mucho el síntoma pero sigue derivando con el
-plazo, porque promediar no es lo mismo que descontar cada tramo en su sitio.
-
 A 180 días es el mismo patrón, más suave: de 11,67 % a **2,75 %** con el método de hoy, y
 de 11,66 % a 11,61 % período a período.
 
-**La corrección aplicada** es la tercera columna: descontar V₁ tramo a tramo, cada uno con
-el mismo IPC que armó el cupón que lo cierra — **exactamente lo que IBR ya hacía**. Es el
-mismo principio del invariante 6 («el cupón y el descuento comparten el índice»), que a
-IPC nunca se le había aplicado. La base sigue siendo ACT/365; lo que deja de existir es
-la tasa única, y por eso `tasa_salida` viene `None` en IPC igual que en IBR.
+**La corrección propuesta** es descontar V₁ período a período, cada flujo con el mismo IPC
+que armó su propio cupón — **exactamente lo que IBR ya hace**. Es el mismo principio del
+invariante 6 («el cupón y el descuento comparten el índice»), que a IPC nunca se le
+aplicó. Deja el HPR plano en los seis plazos y clavado en la tasa de entrada.
 
-Al vencimiento el HPR **sí** baja con el plazo —de 11,67 % a 9,94 % en la medición de
-arriba— y eso es correcto: si el escenario dice que la inflación converge, un papel que se
-tiene hasta el final cobra de verdad cupones más bajos. Lo que no tenía sentido era que
-eso apareciera a 90 días, donde casi todo el valor está en la venta.
-
-**IBR nunca tuvo este problema**, porque su V₁ ya descontaba así desde que se adoptó el
+**IBR no tiene este problema**, porque su V₁ ya descuenta así desde que se adoptó el
 método de la bvc. La bajada que sí tiene con el plazo es suave —13,2 % a 11,9 % a 36
 meses— y **legítima**: sigue la Tasa (T) de su propio nodo cuando la curva `IND_IBR` viene
 cayendo. Un papel largo sobre una curva que baja rinde menos, y eso es información.
@@ -875,10 +861,8 @@ A 90 días casi nada, porque solo se alcanzan a cobrar dos o tres cupones; al ve
 mucho, porque se cobran todos. **Antes del cambio el escenario movía cientos de puntos
 básicos ya a 90 días**, y era un artefacto: los cupones se proyectaban con la senda
 entera mientras el descuento leía un solo punto de ella, así que la asimetría aparecía
-como rentabilidad. Es exactamente el mismo defecto que tenía IPC y que se corrigió
-después, en «Por qué V₁ lee la senda entera y no un solo punto». En IBR la pregunta que
-mueve el número es el **margen**, no el nivel del índice — que es justo para lo que
-existe el campo de delta.
+como rentabilidad. En IBR la pregunta que mueve el número es el **margen**, no el nivel
+del índice — que es justo para lo que existe el campo de delta.
 
 #### Por qué el cupón y el descuento comparten `N_i`
 
@@ -1053,7 +1037,7 @@ todos los bloques:
 | Tipo | Cupón del período | Tasa de descuento en la entrada | En la salida |
 |---|---|---|---|
 | Tasa fija | `cupón / 4` | `TIR(T)` | `TIR(T) + δ` |
-| IPC | `((1+IPC_inicio) × (1+cupón))^(1/4) − 1` | `(1 + margen) × (1 + IPC de la barra) − 1` | **una tasa por tramo**: `(1 + margen + δ) × (1 + IPC_inicio) − 1` |
+| IPC | `((1+IPC_inicio) × (1+cupón))^(1/4) − 1` | `(1 + margen) × (1 + IPC de la barra) − 1` | `(1 + margen + δ) × (1 + IPC en T+h) − 1` |
 | IBR | `(IBR_inicio + cupón) / 12` | la **«Tasa (T)» del rango**, tal cual | **una tasa por período**: `(1 + (IBR_inicio + margen + δ)/12)^(−e_i)` |
 
 En IBR la salida no tiene una sola tasa. Cada período se descuenta con **el mismo índice
@@ -1119,7 +1103,7 @@ cualquier δ**.
 | Tipo | Qué desplaza | Dónde entra en la salida |
 |---|---|---|
 | Tasa fija | la TIR, porque no hay margen | `TIR(T) + δ`, tasa única |
-| IPC | el margen | entra en **cada tramo**: `(1 + margen + δ) × (1 + IPC que armó ese cupón) − 1` |
+| IPC | el margen | `(1 + margen + δ) × (1 + IPC_proy(T+h)) − 1`, tasa única |
 | IBR | el margen | en **cada período**: `(1 + (IBR que fijó ese cupón + margen + δ)/12)^(−e_i)` |
 
 **A 90 y 180 días el delta pesa mucho; al vencimiento casi nada.** No es un defecto: al
@@ -1165,12 +1149,10 @@ De −50 a +100 pb el HPR a 90 días recorre 466 pb, y al vencimiento medio punt
    pocos a 90 días, porque un flotante está construido para que el nivel del índice no
    mueva su precio. Ver «El escenario casi no mueve el HPR de IBR».
 
-6. **El cupón de cada período y su tasa de descuento usan el mismo índice**, en IPC y en
-   IBR. En IBR se fija con la prueba de par: un flotante cuyo margen iguala a su cupón
-   facial vale exactamente capital más corrido, con cualquier senda. En IPC se fija con
-   la prueba de la senda que converge: el HPR a 90 días se queda plano en los seis
-   plazos en vez de hundirse hasta −10,79 %. Es lo que garantiza que un papel no se
-   descuente con una inflación que su propio escenario no dice.
+6. En IBR, **el cupón de cada período y su tasa de descuento usan el mismo índice**. Se
+   fija con la prueba de par: un flotante cuyo margen iguala a su cupón facial vale
+   exactamente capital más corrido, con cualquier senda. Es lo que garantiza que el
+   precio no dependa del nivel del índice.
 
 ### Dos advertencias que el reporte muestra
 
@@ -1552,7 +1534,7 @@ donde el corte no cambió.
 | Nemotécnicos CINAS y TDS | fuera de la tabla de TES (llegan con tasa y duración en cero) |
 | Corte de los bloques | ventanas mensuales de vencimiento, con la ventana de fechas en la primera columna |
 | Rentabilidades esperadas | solo CDT; tres tipos, tres escenarios, delta libre en pb |
-| Valoración del CDT sintético de IPC | vence en el borde de su ventana; cupón trimestral `[(1+cupón T)(1+IPC)]^(1/4)−1` con el IPC de tres meses antes de cada pago; **V₀ con la convención del proveedor** —solo el primer cupón usa el índice que se le fijó, los demás el IPC de la barra— descontado a la TIR del nodo; cupones cobrados y V₁ proyectados con la senda del escenario; **V₁ tramo a tramo**, cada uno a `(1+margen real+δ)(1+IPC que armó ese cupón)−1` en ACT/365, no a una tasa única leída en un solo punto de la senda |
+| Valoración del CDT sintético de IPC | vence en el borde de su ventana; cupón trimestral `[(1+cupón T)(1+IPC)]^(1/4)−1` con el IPC de tres meses antes de cada pago; **V₀ con la convención del proveedor** —solo el primer cupón usa el índice que se le fijó, los demás el IPC de la barra— descontado a la TIR del nodo; cupones cobrados y V₁ proyectados con la senda del escenario; venta a `(1+margen real+δ)(1+IPC esperado en la fecha de salida)−1` |
 | Valoración del CDT sintético de IBR | vence el último día de su ventana; cupón mensual `(IBR + cupón T)/12` con el IBR de un mes antes de cada pago; **V₀ con la convención del proveedor** —el primer cupón de `IB1.xlsx`, los demás de la curva forward `IND_IBR` del día hábil anterior— descontado a la «Tasa (T)» del rango tal cual; cupones cobrados y V₁ proyectados con la senda del escenario; **V₁ por el método de la Calculadora IBR de la bvc**: una tasa por período, `(IBR que fijó ese cupón + margen del atajo + δ)/12`, base 30/360, con el exponente `L/K` solo en el primer período |
 | Horizonte | 7 años en tasa fija, 3 en IPC y en IBR |
 | Contenido del nodo | promedio de todos los títulos que vencen en la ventana |
@@ -1662,7 +1644,14 @@ dividía por cero.
    aplazó a propósito porque cambia el precio de entrada, que es la cifra que se concilia
    contra el proveedor. Está medido en «Lo que queda de brecha entre la entrada y la
    salida».
-8. **Las rentabilidades esperadas de IPC e IBR están en confirmación.** Las convenciones
+8. **La tasa de salida de IPC lee un solo punto de la senda**, el de T+h, y lo aplica a
+   toda la vida que le queda al papel. Con sendas que convergen, los nodos largos caen a
+   90 y 180 días hasta volverse negativos: −10,79 % a 36 meses en el caso medido. La
+   corrección propuesta —descontar período a período, como ya hace IBR— lo deja plano en
+   10,92 %. Está medido en «Pendiente: la tasa de salida lee un solo punto de la senda» y
+   **no se ha aplicado**: es convención de negocio.
+
+9. **Las rentabilidades esperadas de IPC e IBR están en confirmación.** Las convenciones
    de las dos secciones anteriores son las acordadas hasta hoy y pueden ajustarse; el
    README es el sitio donde queda constancia de cuál rige en cada momento.
 

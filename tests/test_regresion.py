@@ -1644,14 +1644,10 @@ def test_el_margen_del_hpr_es_el_de_la_tabla_de_curvas():
         # la entrada es la TIR del nodo, venga el IPC de donde venga
         assert r[0].tasa_entrada == pytest.approx(tir, abs=1e-12), ipc_barra
         assert r[0].v0 == pytest.approx(r[1].v0) == pytest.approx(r[2].v0)
-        # En IPC ya no hay una sola tasa de salida que mirar —cada tramo de V₁ se
-        # descuenta con el IPC que armó su cupón—, así que lo observable es el precio.
-        assert r[0].tasa_salida is None
-        salidas[ipc_barra] = r[0].v1
+        salidas[ipc_barra] = r[0].tasa_salida
 
-    # un IPC de barra más bajo deja un margen más alto, y con él una venta más cara:
-    # se descuenta a tasas mayores y V₁ vale menos
-    assert salidas[0.0550] < salidas[0.0614] < salidas[0.0700]
+    # un IPC de barra más bajo deja un margen más alto, y con él una venta más cara
+    assert salidas[0.0550] > salidas[0.0614] > salidas[0.0700]
 
     # sin indicar el índice de entrada se cae al de la senda, como antes
     margen_senda = (1 + tir) / 1.0621 - 1
@@ -2090,72 +2086,3 @@ def test_el_paquete_se_puede_ejecutar_con_m():
                        cwd=RAIZ, capture_output=True, text=True)
     assert r.returncode != 0
     assert "Traceback" not in r.stderr
-
-
-def test_v1_de_ipc_lee_la_senda_entera_y_no_un_solo_punto():
-    """Los nodos largos ya no se hunden a 90 y 180 días con una senda que converge.
-
-    Antes, la tasa de salida era `(1+margen)(1+IPC en T+h)−1`: **un solo punto** de
-    la senda, el del día de la venta, y el mismo para todos los plazos. Con una senda
-    plana da igual, pero las reales convergen —arrancan altas y bajan—, y entonces
-    ese punto sigue alto mientras el papel va a vivir una inflación media mucho menor.
-    El nodo de 36 meses se descontaba al 7,3 % cuando su propia senda decía 5,2 %: la
-    duración multiplicaba el castigo y el HPR caía a −10,79 % a 90 días.
-
-    Ahora cada tramo de V₁ se descuenta con el IPC que armó el cupón que lo cierra,
-    igual que en IBR. El HPR se queda plano en los seis plazos y cerca de la tasa de
-    entrada, que es lo que tiene que pasar cuando el escenario no dice nada raro del
-    primer trimestre.
-    """
-    from sx_pricer.escenarios import ESCENARIOS, Escenarios, Senda
-    from sx_pricer import hpr as H
-
-    T, barra, tir = dt.date(2026, 7, 28), 0.0614, 0.1107
-    margen = (1 + tir) / (1 + barra) - 1
-    fechas = [T + dt.timedelta(days=k) for k in range(-500, 1800)]
-    # senda que converge: 8,0 % bajando a 4,0 % en 18 meses
-    valores = [0.08 + (0.04 - 0.08) * min(1.0, max(0.0, k / 30.0) / 18)
-               for k in range(-500, 1800)]
-    esc = Escenarios(sendas={
-        "IPC": Senda("IPC", fechas, {e: list(valores) for e in ESCENARIOS}),
-        "IBR": Senda("IBR", fechas, {e: [0.115] * len(fechas) for e in ESCENARIOS})})
-
-    a90 = []
-    for meses in (6, 12, 18, 24, 30, 36):
-        r = H.calcular(tipo="ipc", fecha_val=T, vencimiento=H.menos_meses(T, -meses),
-                       tir=tir, cupon_facial=0.03, indice_entrada=barra, margen=margen,
-                       escenarios=esc, escenario="Base")
-        a90.append(r[0].hpr)
-        # a 90 y a 180 dias el HPR se queda junto a la tasa de entrada
-        assert abs(r[0].hpr - tir) < 0.002, (meses, r[0].hpr)
-        assert abs(r[1].hpr - tir) < 0.008, (meses, r[1].hpr)
-        assert r[0].tasa_salida is None          # ya no hay una sola tasa de salida
-
-    # y no decae con el plazo: antes iba de 11,02 % a −10,79 %
-    assert max(a90) - min(a90) < 0.002
-
-
-def test_en_ipc_el_cupon_y_su_descuento_comparten_el_indice():
-    """El invariante 6, que IBR ya cumplía, aplicado a IPC.
-
-    Con la senda plana en el mismo valor de la barra, descontar tramo a tramo tiene
-    que dar exactamente lo mismo que descontar todo a una sola tasa: los tramos usan
-    todos el mismo índice. Es la comprobación de que el cambio no movió el caso
-    sencillo, solo el de la senda con pendiente.
-    """
-    from sx_pricer.escenarios import ESCENARIOS, Escenarios, Senda
-    from sx_pricer import hpr as H
-
-    T, barra, tir = dt.date(2026, 7, 28), 0.0614, 0.1107
-    margen = (1 + tir) / (1 + barra) - 1
-    fechas = [T + dt.timedelta(days=k) for k in range(-500, 1800)]
-    plana = Escenarios(sendas={
-        "IPC": Senda("IPC", fechas, {e: [barra] * len(fechas) for e in ESCENARIOS}),
-        "IBR": Senda("IBR", fechas, {e: [0.115] * len(fechas) for e in ESCENARIOS})})
-
-    for meses in (6, 12, 24, 36):
-        r = H.calcular(tipo="ipc", fecha_val=T, vencimiento=H.menos_meses(T, -meses),
-                       tir=tir, cupon_facial=0.03, indice_entrada=barra, margen=margen,
-                       escenarios=plana, escenario="Base")
-        for x in r:
-            assert x.hpr == pytest.approx(tir, abs=1e-9), (meses, x.dias)
