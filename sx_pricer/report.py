@@ -87,9 +87,6 @@ body{margin:0;background:var(--fondo);color:var(--tinta);font-family:var(--sans)
   color:#FFF}
 .hero .sub{margin:1px 0 0;font-size:17px;font-weight:700;color:var(--verde-vivo);
   letter-spacing:-.01em;line-height:1.2}
-.corte{margin-left:auto;background:var(--blanco);color:var(--tinta);border-radius:8px;
-  padding:7px 14px;font-size:12px;font-weight:700;white-space:nowrap;
-  font-variant-numeric:tabular-nums;box-shadow:0 1px 2px rgba(0,0,0,.18)}
 
 /* Fichas de pestania: la activa en blanco y las otras translucidas, con su conteo
    debajo. Es mas ancho que un subrayado, pero dice de que tamanio es cada pestania
@@ -364,7 +361,6 @@ noscript p{background:var(--av-fondo);border:1px solid var(--av-borde);border-ra
   .hero{background:#fff;color:var(--tinta);padding-bottom:10px;
         border-bottom:2px solid var(--marca)}
   .top h1{color:var(--tinta)} .hero .sub{color:var(--acento)}
-  .corte{box-shadow:none;border:1px solid var(--regla)}
   .tabs,.toggle,.xls{display:none}       /* nada de controles en papel */
   thead th{background:#fff;color:var(--tinta);border-bottom:1.5px solid var(--marca)}
   thead th.grupo{background:#fff;color:var(--tinta-media);
@@ -763,7 +759,7 @@ JS = r"""
 (function(){
 'use strict';
 var D = JSON.parse(document.getElementById('sx-datos').textContent), CFG = D.config;
-var fmt = SX.fmt, pct = SX.pct, bps = SX.bps, clase = SX.clase;
+var fmt = SX.fmt, pct = SX.pct, bps = SX.bps, bpsUd = SX.bpsUd, clase = SX.clase;
 var $ = function(id){ return document.getElementById(id); };
 var tip = document.createElement('div'); tip.className = 'tip'; document.body.appendChild(tip);
 function esc(s){ var d = document.createElement('div'); d.textContent = (s === null || s === undefined) ? '' : s; return d.innerHTML; }
@@ -2005,7 +2001,6 @@ function sincronizar(){
   }
   $('aviso-orden').textContent = '';
   ultimoValido = { t: S.t, t1: S.t1 };
-  $('corte').textContent = 'Corte ' + SX.dia(S.t) + '/' + S.t.slice(0, 4);
   $('ipc-t').value = (S.ipcT * 100).toFixed(2);
   $('ipc-t1').value = (S.ipcT1 * 100).toFixed(2);
   $('br').value = (S.br * 100).toFixed(2);
@@ -2114,7 +2109,6 @@ def render(*, serie, seleccion: tuple[str, str], params: MarketParams,
           <h1>Renta fija local</h1>
           <p class="sub">Tomado de precia Sx</p>
         </div>
-        <span class="corte" id="corte"></span>
       </div>
       <div class="tabs" role="tablist" aria-label="Secciones del reporte">
         <button type="button" class="tab" id="tab-curvas" role="tab"

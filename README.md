@@ -1324,7 +1324,10 @@ las pestañas o el selector de fechas a mitad de scroll es peor que el espacio q
 |---|---|
 | Título | **Renta fija local** |
 | Subtítulo | **Tomado de precia Sx**, en verde vivo |
-| Píldora, a la derecha | `Corte 28/07/2026` — la fecha T, que antes solo estaba dentro de un desplegable |
+
+Llevó un tiempo una píldora `Corte 28/07/2026` a la derecha del título. Se retiró: la
+fecha T está justo debajo, en su desplegable de la barra de controles, y la píldora la
+repetía sin poder cambiarla.
 
 ### Tres pestañas, en fichas
 
@@ -1601,6 +1604,42 @@ a un correo.
 
 ---
 
+### La pantalla en blanco, y la prueba que faltaba
+
+Al terminar el rediseño el reporte salió con **los paneles vacíos**: la cabecera, las
+pestañas y la barra de controles perfectas, y debajo nada. El HTML estaba completo —los
+datos, el script de cálculo y el de interfaz, todo en su sitio— y las pruebas pasaban.
+
+El script de interfaz toma del de cálculo los nombres que usa, en una sola línea:
+
+```js
+var fmt = SX.fmt, pct = SX.pct, bps = SX.bps, bpsUd = SX.bpsUd, clase = SX.clase;
+```
+
+El rediseño añadió `bpsUd` —el `bps` de siempre, pero con su `pb` en versalita detrás— y
+se quedó fuera de esa línea. La primera tabla que lo llamaba lanzaba `ReferenceError`, y
+como todo el render cuelga de una sola función (`actualizar()`), la excepción se llevaba
+por delante los nueve paneles de una vez. Nada en la pantalla decía qué había pasado: un
+error de JavaScript no deja rastro visible, solo una consola que nadie tiene abierta.
+
+**Por qué ninguna prueba lo vio.** Las pruebas de interfaz cargan el reporte en un DOM de
+verdad (`verificar_dom.js` sobre jsdom) y habrían cazado esto en el primer segundo. Pero
+todas llevaban `@tiene_datos`: sin los planos SX de referencia —que no se versionan— se
+saltan enteras. En la práctica la interfaz nunca se ejecutaba salvo en la máquina que
+tuviera los archivos del día.
+
+**El arreglo.** `tests/sintetico.py` fabrica una `Serie` con la misma forma que la real
+—los tres bloques con sus familias, la rejilla mensual completa, el universo TES en pesos
+y en UVR, la senda diaria de IBR y las tres sendas de proyección— con números inventados.
+Sobre ella corre `test_la_interfaz_se_dibuja_sin_datos_reales`, que **no está condicionada
+a nada**: exige cero excepciones y que ningún panel salga vacío. Los números que fija no
+significan nada; lo que fija es que la pantalla se dibuja y reacciona.
+
+Las pruebas que sí miran cifras siguen pidiendo los planos reales. Son cosas distintas y
+ahora están separadas.
+
+---
+
 ## Qué hace, capa por capa
 
 | Módulo | Reemplaza a | Función |
@@ -1836,6 +1875,7 @@ sx_pricer/
     cli.py          línea de comandos
 tests/
     test_regresion.py
+    sintetico.py       reporte de prueba con datos inventados, sin planos SX
     verificar_js.js    corre la capa de cálculo del navegador para compararla
     verificar_hpr.js   la misma capa, sobre la pestaña de rentabilidades esperadas
     verificar_dom.js   carga el reporte en un DOM real y lo interactúa

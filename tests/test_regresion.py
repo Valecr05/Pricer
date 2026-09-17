@@ -1794,17 +1794,32 @@ def test_la_pestana_de_rentabilidades_funciona(reporte_completo):
     assert d["errores"] == []
 
     tf = d["hprTF"]
-    assert tf["panel"] and tf["tablas"] == 3
-    assert tf["titulos"] == ["Horizonte 90 días", "Horizonte 180 días", "Al vencimiento"]
+    # el panel trae el resumen arriba y el detalle de un horizonte debajo
+    assert tf["panel"] and tf["tablas"] == 2
+    assert tf["titulos"] == ["Resumen", "Detalle de rentabilidades"]
+    assert tf["columnasResumen"] == ["Indicador", "90 días", "180 días", "12 meses",
+                                     "18 meses", "24 meses"]
+    assert tf["filasResumen"] == 8             # un indicador por fila
     assert tf["tipoActivo"] == ["fs"] and tf["escenarioActivo"] == ["Base"]
     assert tf["escDeshabilitados"] == 3        # la tasa fija no usa escenario
-    assert tf["filas"] % 3 == 0 and tf["filas"] // 3 > 40
-    assert tf["notas"] == 3
+    assert tf["filas"] > 40                    # un rango por fila, un horizonte a la vez
+    assert tf["notas"] == 1
+
+    # los botones de horizonte cambian el detalle y dejan el resumen quieto
+    assert [h["activo"] for h in d["porHorizonte"]] == [["0"], ["1"], ["2"]]
+    assert tf["horizontes"] == ["90 días", "180 días", "Vencimiento"]
+    resumenes = [h["resumen90"] for h in d["porHorizonte"]]
+    assert resumenes[0] == resumenes[1] == resumenes[2]
+    # al vencimiento el resultado no puede ser el mismo que a 90 días en los rangos
+    # largos, que es justo lo que distingue un horizonte del otro
+    assert d["porHorizonte"][0]["hpr"] != d["porHorizonte"][2]["hpr"]
 
     # barras de diferencia en el eje derecho, en los tres bloques y pegadas
     for gid, g in d["barras"].items():
         assert g["barras"] > 0, gid
-        assert g["huecosEntreBarras"] == 0, gid       # sin espacio entre barras
+        # 2 px de aire entre columnas, iguales en toda la serie
+        for sep in g["separaciones"]:
+            assert abs(float(sep) - 2) <= 0.15, (gid, sep)
         assert g["rotuloDelta"], gid
         assert "0" in g["ejeDelta"], gid              # la escala pasa por cero
         assert g["ejeDelta"] == sorted(g["ejeDelta"], key=float), gid
@@ -1859,13 +1874,17 @@ def test_la_interfaz_se_renderiza_y_reacciona(reporte):
     inicial = d["alCargar"]
     assert inicial["panelVisible"] == ["panel-curvas"]
     assert inicial["pestanaActiva"] == ["tab-curvas"]
-    assert len(inicial["graficasBloque"]) == sum(len(b.familias) for b in BLOCKS)
+    # una tarjeta a la vez: el bloque de tasa fija en su primera familia
+    assert len(inicial["graficasBloque"]) == 1
     assert all(g["svg"] == 1 and g["series"] == 2 for g in inicial["graficasBloque"])
-    assert inicial["tablasBloque"] == len(inicial["graficasBloque"])
-    # por tabla: una nota de muestra y una de ventana; más una de curva faltante
-    # en los bloques con margen sobre IBR
-    con_margen = sum(len(b.familias) for b in BLOCKS if b.margen_atajo)
-    assert inicial["notas"] == 2 * inicial["tablasBloque"] + con_margen
+    assert inicial["tablasBloque"] == 1
+    # el selector de vista trae un botón por bloque y uno por familia del visible
+    assert inicial["vistas"] == ([f"bloque:{b.id}" for b in BLOCKS] +
+                                 [f"familia:{f}" for f in BLOCKS[0].familias])
+    assert inicial["vistaActiva"] == [f"bloque:{BLOCKS[0].id}",
+                                      f"familia:{BLOCKS[0].familias[0]}"]
+    # la tabla visible lleva su nota de muestra y su nota de ventana
+    assert inicial["notas"] == 2
     assert inicial["tiles"] == 6
     assert inicial["camposCinta"] == len(cfg.DETAIL_LAYOUT)
     assert inicial["embudos"] == 2
@@ -1897,6 +1916,77 @@ def test_la_interfaz_se_renderiza_y_reacciona(reporte):
     assert d["parInvalido"]["t1"] < d["parInvalido"]["t"]
 
 
+@pytest.fixture(scope="module")
+def reporte_sintetico(tmp_path_factory):
+    """Reporte armado con datos inventados: no necesita los planos SX."""
+    from tests import sintetico
+    destino = tmp_path_factory.mktemp("sintetico") / "r.html"
+    destino.write_text(sintetico.html(), encoding="utf-8")
+    return destino
+
+
+@pytest.mark.skipif(not JSDOM, reason="jsdom no instalado (npm install jsdom)")
+def test_la_interfaz_se_dibuja_sin_datos_reales(reporte_sintetico):
+    """Ninguna excepción puede cortar el render, y ningún panel puede salir vacío.
+
+    Esta es la prueba que faltaba. Las otras de interfaz llevan `@tiene_datos`, así
+    que donde no están los planos SX se saltan todas — y en un rediseño se publicó un
+    reporte que en el navegador no pintaba nada: una función de formato quedó fuera de
+    la lista de nombres que el script de interfaz toma del de cálculo, y el
+    `ReferenceError` reventaba `actualizar()` entero. El HTML se veía perfecto, las
+    pruebas de datos pasaban, y la pantalla salía en blanco.
+
+    Con datos sintéticos esto corre en cualquier máquina.
+    """
+    import subprocess
+    guion = Path(__file__).parent / "verificar_dom.js"
+    r = subprocess.run([NODE, str(guion), str(reporte_sintetico)], cwd=RAIZ,
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[-2000:]
+    d = json.loads(r.stdout)
+
+    # lo primero que se mira: ninguna excepción del propio reporte
+    assert d["errores"] == []
+    assert "abortado" not in d, d["abortado"]
+
+    # cada panel tiene que traer algo: es lo que el error de arriba dejaba vacío
+    inicial = d["alCargar"]
+    assert inicial["tiles"] == 6                      # el resumen de arriba
+    assert inicial["tablasBloque"] == 1                # la tarjeta del bloque visible
+    assert len(inicial["graficasBloque"]) == 1
+    assert inicial["graficasBloque"][0]["svg"] == 1
+    assert inicial["camposCinta"] == len(cfg.DETAIL_LAYOUT)
+    assert inicial["embudos"] == 2
+    assert inicial["vistaActiva"] == ["bloque:fs", "familia:CDT"]
+
+    # los tres bloques se pueden recorrer, y cada uno trae su tabla
+    for clave in ("tablaFs", "tablaIpc", "tablaIbr"):
+        assert d[clave]["celdas"] > 0, clave
+    assert d["tablaIbr"]["celdas"] == d["tablaFs"]["celdas"] + 3
+    assert d["tablaIpc"]["celdas"] == d["tablaFs"]["celdas"] + 3
+    assert d["tablaFs"]["conmutadores"] == 0
+    assert d["tablaIbr"]["conmutadores"] == 2 and d["tablaIpc"]["conmutadores"] == 2
+
+    # la pestaña de rentabilidades trae sus dos tablas y sus botones de horizonte
+    tf = d["hprTF"]
+    assert tf["tablas"] == 2
+    assert tf["titulos"] == ["Resumen", "Detalle de rentabilidades"]
+    assert tf["horizontes"] == ["90 días", "180 días", "Vencimiento"]
+    assert tf["filas"] > 0 and tf["filasResumen"] == 8
+    assert [h["activo"] for h in d["porHorizonte"]] == [["0"], ["1"], ["2"]]
+
+    # y la de comparación y control dibuja la gráfica de TES
+    assert d["trasAbrirDatos"]["tes"]["svg"] == 1
+
+    # un botón de Excel por tabla, con nombre propio
+    for clave, e in d["excel"].items():
+        if clave == "nombres":
+            continue
+        assert e["botones"] == e["tablas"] > 0, clave
+        assert e["bienColocados"] == e["botones"], clave
+    assert len(set(d["excel"]["nombres"])) == len(d["excel"]["nombres"])
+
+
 @pytest.mark.skipif(not JSDOM, reason="jsdom no instalado (npm install jsdom)")
 @hay_curva
 @tiene_datos
@@ -1908,9 +1998,10 @@ def test_la_interfaz_muestra_el_margen_ibr(reporte_con_curvas):
                                   capture_output=True, text=True, check=True).stdout)
     assert d["errores"] == []
 
-    # el conmutador está en los dos bloques que tienen dos medidas del mismo nodo
+    # el conmutador está en los dos bloques que tienen dos medidas del mismo nodo.
+    # Se cuenta recorriendo los bloques uno a uno, porque solo se ve el activo.
     con_dos = [b for b in BLOCKS if b.margen_atajo or b.indicador in ("IPC", "ICP", "IP4")]
-    assert d["conmutadores"]["botones"] == 2 * sum(len(b.familias) for b in con_dos)
+    assert d["conmutadores"]["botones"] == 2 * len(con_dos)
     assert set(d["conmutadores"]["etiquetas"]) == {"TIR", "Tasa", "Margen"}
     # el conmutador nunca se esconde: si una fecha no tiene margen queda visible y
     # deshabilitado con el motivo en el titulo, en vez de desaparecer sin explicacion
